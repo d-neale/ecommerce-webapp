@@ -128,6 +128,13 @@ npm run preview
 
 Or deploy the generated `dist/` folder to any static host (Netlify, Vercel, Cloudflare Pages, GitHub Pages, etc.).
 
+### GitHub Pages
+
+This repo includes a GitHub Actions workflow that builds and deploys the `dist/` output to GitHub Pages.
+
+1. Push to `main`
+2. In GitHub: Settings → Pages → Source: **GitHub Actions**
+
 
 
 ---
@@ -173,5 +180,7 @@ You may use, modify, and distribute the code, provided that:
 
 
 ## 👤 Author
+
+
 
 **Daniel Neale**
