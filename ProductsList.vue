@@ -2198,7 +2198,7 @@ header {
 
   .product-info {
     padding: 0.875rem;
-    height: 11.5rem;
+    height: 12.25rem;
   }
 
   .product-title {
@@ -2253,31 +2253,33 @@ header {
   }
 
   .product-meta {
-    gap: 0.25rem;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    column-gap: 0.25rem;
+    align-items: start;
     margin-bottom: 0.25rem;
-    flex-wrap: nowrap;
-    justify-content: space-between;
-    align-items: flex-start;
+    width: 100%;
   }
 
   .meta-pill {
     font-size: 0.5625rem;
     padding: 0.1875rem 0.375rem;
-    flex: 0 0 auto;
+    display: block;
+    max-width: 100%;
   }
 
   .product-rating {
-    flex: 0 0 auto;
+    justify-self: start;
+    white-space: nowrap;
   }
 
   .product-stock {
-    flex: 1 1 auto;
-    min-width: 0;
-    margin-left: auto;
-    max-width: 7.5rem;
+    justify-self: end;
+    max-width: 8.75rem;
     white-space: normal;
     text-align: right;
     line-height: 1.1;
+    overflow-wrap: anywhere;
   }
 }
 
