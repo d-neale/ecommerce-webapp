@@ -330,10 +330,6 @@ const titleMaxLength = computed(() => {
   return 70
 })
 
-const searchPlaceholder = computed(() =>
-  viewportWidth.value <= 480 ? 'Search by product...' : 'Search by product name...'
-)
-
 const descriptionMaxLength = computed(() => {
   if (viewportWidth.value <= 480) return 50
   if (viewportWidth.value <= 768) return 75
@@ -728,7 +724,7 @@ watch(
               type="text" 
               id="textbox1"
               :maxlength="MAX_SEARCH_LENGTH"
-              :placeholder="searchPlaceholder"> 
+              placeholder="Search by product name..."> 
               <button
                 v-if="inputText.length > 0"
                 type="button"
@@ -2212,7 +2208,7 @@ header {
   .product-info {
     padding: 0.875rem;
     height: auto;
-    min-height: 16.5rem;
+    min-height: 17.5rem;
   }
 
   .product-title {
@@ -2267,10 +2263,10 @@ header {
   }
 
   .products-grid .product-info .product-meta {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 0.25rem;
+    display: grid;
+    grid-template-columns: max-content minmax(0, 7.25rem);
+    column-gap: 0.25rem;
+    align-items: start;
     margin-bottom: 0.25rem;
     width: 100%;
   }
@@ -2280,37 +2276,40 @@ header {
     padding: 0.1875rem 0.375rem;
     display: inline-flex;
     align-items: center;
+    justify-content: center;
     gap: 0.25rem;
+    max-width: 100%;
     line-height: 1.2;
-    white-space: normal;
+    min-width: 0;
+    white-space: nowrap;
     overflow: visible;
     box-sizing: border-box;
-    max-width: 100%;
   }
 
   .products-grid .product-info .meta-pill.product-rating {
     white-space: nowrap;
-    align-self: flex-start;
+    justify-self: start;
   }
 
   .products-grid .product-info .meta-pill.product-stock {
-    align-self: flex-end;
-    display: inline-flex;
-    flex-wrap: wrap;
-    justify-content: flex-end;
+    justify-self: end;
+    width: 100%;
+    display: block;
     text-align: right;
-    white-space: normal;
-    width: auto;
+    overflow: visible;
     min-width: 0;
     max-width: 100%;
-    overflow: visible;
-    margin-left: 0;
+    white-space: normal !important;
+    line-height: 1.15;
   }
 
   .products-grid .product-info .meta-pill.product-stock .stock-count,
   .products-grid .product-info .meta-pill.product-stock .stock-label {
-    display: inline;
-    white-space: normal;
+    display: block !important;
+    white-space: normal !important;
+    overflow: visible;
+    overflow-wrap: anywhere;
+    word-break: break-word;
   }
 }
 
