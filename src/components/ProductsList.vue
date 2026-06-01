@@ -313,10 +313,10 @@ const formatStockCount = (value) => {
   return n.toLocaleString('en-US')
 }
 
-const getStockLines = (value) => {
+const formatStockText = (value) => {
   const n = Number(value)
-  if (!Number.isFinite(n) || n <= 0) return ['out', 'of stock']
-  return [formatStockCount(n), 'in stock']
+  if (!Number.isFinite(n) || n <= 0) return 'out of stock'
+  return `${formatStockCount(n)} in\u00A0stock`
 }
 
 const clipText = (value, maxLength) => {
@@ -1148,13 +1148,7 @@ watch(
                     <div class="product-meta">
                       <span class="meta-pill product-rating">⭐ {{ productStore.formatRating(p.rating) }}</span>
                       <span class="meta-pill product-stock" :class="{ 'low-stock': p.stock < 10 }">
-                        <span class="stock-text">
-                          <span
-                            v-for="(line, lineIndex) in getStockLines(p.stock)"
-                            :key="lineIndex"
-                            class="stock-line"
-                          >{{ line }}</span>
-                        </span>
+                        <span class="stock-text">{{ formatStockText(p.stock) }}</span>
                       </span>
                     </div>
                   </div>
@@ -2219,7 +2213,7 @@ header {
   .product-info {
     padding: 0.875rem;
     height: auto;
-    min-height: 17.5rem;
+    min-height: 15.75rem;
   }
 
   .product-title {
@@ -2256,16 +2250,16 @@ header {
 
   .product-badges {
     flex-wrap: nowrap;
-    gap: 0.1875rem;
-    left: 0.375rem;
-    right: 0.375rem;
-    top: 0.375rem;
+    gap: 0.125rem;
+    left: 0.3125rem;
+    right: 0.3125rem;
+    top: 0.3125rem;
     overflow: hidden;
   }
 
   .badge-tag {
-    font-size: 0.5625rem;
-    padding: 0.125rem 0.3125rem;
+    font-size: 0.5rem;
+    padding: 0.0625rem 0.25rem;
     letter-spacing: 0;
     flex: 0 1 auto;
     min-width: 0;
@@ -2277,6 +2271,7 @@ header {
     display: flex;
     align-items: flex-start;
     gap: 0.25rem;
+    margin-top: 0;
     margin-bottom: 0.25rem;
     width: 100%;
   }
@@ -2292,26 +2287,19 @@ header {
     width: auto;
     min-width: 3.75rem;
     max-width: 42%;
-    text-align: right;
+    text-align: left;
     white-space: normal;
     overflow: visible;
-    align-items: flex-end;
+    align-items: flex-start;
     align-self: flex-start;
     padding: 0.3125rem 0.4375rem;
     line-height: 1.15;
   }
 
   .products-grid .product-info .meta-pill.product-stock .stock-text {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-end;
-    gap: 0.0625rem;
-    line-height: 1.15;
-  }
-
-  .products-grid .product-info .meta-pill.product-stock .stock-line {
     display: block;
-    white-space: nowrap;
+    white-space: normal;
+    overflow-wrap: anywhere;
   }
 }
 
