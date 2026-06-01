@@ -2211,13 +2211,20 @@ header {
   }
 
   .product-info {
-    padding: 0.875rem;
+    padding: 0.75rem 0.75rem 0.5rem;
     height: auto;
     min-height: 14.5rem;
   }
 
   .product-title {
     font-size: 0.9375rem;
+    line-height: 1.25;
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    overflow-wrap: anywhere;
+    max-height: calc(1.25em * 2);
+    min-height: calc(1.25em * 2);
   }
 
   .price-container {
@@ -2272,14 +2279,14 @@ header {
     display: flex;
     align-items: flex-start;
     gap: 0.25rem;
-    margin-top: 0;
-    margin-bottom: 0.125rem;
+    margin-top: auto;
+    margin-bottom: 0;
     width: 100%;
   }
 
   .products-grid .product-info .meta-pill {
-    font-size: 0.5625rem;
-    padding: 0.1875rem 0.375rem;
+    font-size: 0.6875rem;
+    padding: 0.25rem 0.4375rem;
     line-height: 1.15;
   }
 
@@ -2291,15 +2298,15 @@ header {
   .products-grid .product-info .meta-pill.product-stock {
     margin-left: auto;
     flex: 0 0 auto;
-    width: auto;
+    width: 5.25rem;
     min-width: 3.75rem;
-    max-width: 60%;
+    max-width: 55%;
     text-align: left;
     white-space: normal;
     overflow: visible;
     align-items: flex-start;
     align-self: flex-start;
-    padding: 0.1875rem 0.375rem;
+    padding: 0.25rem 0.4375rem;
     line-height: 1.15;
   }
 
