@@ -2197,9 +2197,14 @@ header {
     gap: 0.875rem;
   }
 
+  .product-card-shell {
+    height: auto;
+  }
+
   .product-info {
     padding: 0.875rem;
-    height: 13.75rem;
+    height: auto;
+    min-height: 15.25rem;
   }
 
   .product-title {
