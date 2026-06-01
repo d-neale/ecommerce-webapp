@@ -345,8 +345,10 @@ const descriptionMaxLength = computed(() => {
 const formatTitle = (value) => clipText(value, titleMaxLength.value)
 const formatDescription = (value) => clipText(value, descriptionMaxLength.value)
 
+const fittedTitleById = ref({})
 const fittedDescriptionById = ref({})
 
+let fitTitlesTimer = null
 let fitDescriptionsTimer = null
 
 const makeMeasureBox = (sourceEl) => {
@@ -447,11 +449,76 @@ const fitDescriptions = () => {
   }
 }
 
+const fitTitles = () => {
+  const nodes = Array.from(document.querySelectorAll('.products-grid .product-title[data-product-id]'))
+  if (nodes.length === 0) return
+
+  const next = {}
+
+  for (const el of nodes) {
+    const id = Number(el.dataset.productId)
+    if (!Number.isFinite(id)) continue
+
+    const prod = paginatedProducts.value.find(p => p.id === id)
+    if (!prod) continue
+
+    const original = String(prod.title || '').trim()
+    const normalized = original.replace(/[\s,;:]+$/g, '')
+    if (!normalized) {
+      next[id] = ''
+      continue
+    }
+
+    const measureBox = makeMeasureBox(el)
+
+    let candidate = formatTitle(normalized)
+    measureBox.textContent = candidate
+
+    if (fitsInBox(measureBox)) {
+      next[id] = candidate
+      measureBox.remove()
+      continue
+    }
+
+    let low = 0
+    let high = normalized.length
+    let best = clipText(normalized, 1)
+
+    while (low <= high) {
+      const mid = Math.floor((low + high) / 2)
+      candidate = clipText(normalized, mid)
+      measureBox.textContent = candidate
+      if (fitsInBox(measureBox)) {
+        best = candidate
+        low = mid + 1
+      } else {
+        high = mid - 1
+      }
+    }
+
+    next[id] = best
+    measureBox.remove()
+  }
+
+  if (!mapsEqual(fittedTitleById.value, next)) {
+    fittedTitleById.value = next
+  }
+}
+
 const scheduleFitDescriptions = (delay = 0) => {
   if (fitDescriptionsTimer) clearTimeout(fitDescriptionsTimer)
   fitDescriptionsTimer = setTimeout(() => {
     nextTick(() => {
       requestAnimationFrame(() => fitDescriptions())
+    })
+  }, delay)
+}
+
+const scheduleFitTitles = (delay = 0) => {
+  if (fitTitlesTimer) clearTimeout(fitTitlesTimer)
+  fitTitlesTimer = setTimeout(() => {
+    nextTick(() => {
+      requestAnimationFrame(() => fitTitles())
     })
   }, delay)
 }
@@ -521,6 +588,7 @@ const checkScroll = () => {
   isScrollable.value = scrollHeight > clientHeight + 10 // Small buffer
   isAtBottom.value = scrollTop + clientHeight >= scrollHeight - 50
   scheduleFitDescriptions(0)
+  scheduleFitTitles(0)
 }
 
 let persistSearchTimer = null
@@ -587,6 +655,8 @@ onMounted(async () => {
   scheduleCheckScroll(50)
   scheduleFitDescriptions(50)
   scheduleFitDescriptions(500)
+  scheduleFitTitles(50)
+  scheduleFitTitles(500)
 })
 
 // Watch for category changes in the URL
@@ -605,6 +675,7 @@ onBeforeUnmount(() => {
   if (pressTimer) clearTimeout(pressTimer)
   if (scrollCheckTimer) clearTimeout(scrollCheckTimer)
   if (persistSearchTimer) clearTimeout(persistSearchTimer)
+  if (fitTitlesTimer) clearTimeout(fitTitlesTimer)
   if (fitDescriptionsTimer) clearTimeout(fitDescriptionsTimer)
 })
 
@@ -685,6 +756,7 @@ watch(() => productStore.allProducts, (val) => {
   productList.value = val || []
   scheduleCheckScroll(100)
   scheduleFitDescriptions(100)
+  scheduleFitTitles(100)
 })
 
 // Persist search text as user types (even before Enter)
@@ -695,18 +767,21 @@ watch(inputText, (newVal) => {
   }, 200)
   scheduleCheckScroll(100)
   scheduleFitDescriptions(100)
+  scheduleFitTitles(100)
 })
 
 // watch filtered products to update scroll state
 watch(() => filteredProducts.value, () => {
   scheduleCheckScroll(100)
   scheduleFitDescriptions(100)
+  scheduleFitTitles(100)
 })
 
 watch(
   () => paginatedProducts.value.map(p => p.id).join(','),
   () => {
     scheduleFitDescriptions(0)
+    scheduleFitTitles(0)
   }
 )
 
@@ -1137,10 +1212,14 @@ watch(
 
                 <RouterLink :to="'/product/' + p.id" class="product-link product-link-info">
                   <div class="product-info">
-                    <h2 class="product-title">{{ formatTitle(p.title) }}</h2>
+                    <h2 class="product-title" :data-product-id="p.id">{{ fittedTitleById[p.id] ?? formatTitle(p.title) }}</h2>
                     <div class="price-container">
                       <p class="product-price">£{{ p.price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }}</p>
-                      <p v-if="Math.round(p.discountPercentage) > 0" class="original-price">
+                      <p
+                        class="original-price"
+                        :class="{ 'is-placeholder': Math.round(p.discountPercentage) <= 0 }"
+                        :aria-hidden="Math.round(p.discountPercentage) <= 0"
+                      >
                         £{{ (p.price / (1 - p.discountPercentage / 100)).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }}
                       </p>
                     </div>
@@ -2213,7 +2292,7 @@ header {
   .product-info {
     padding: 0.75rem 0.75rem 0.5rem;
     height: auto;
-    min-height: 14.5rem;
+    min-height: 0;
   }
 
   .product-title {
@@ -2279,7 +2358,7 @@ header {
     display: flex;
     align-items: flex-start;
     gap: 0.25rem;
-    margin-top: auto;
+    margin-top: 0.25rem;
     margin-bottom: 0;
     width: 100%;
   }
@@ -2553,6 +2632,10 @@ header {
   font-size: 0.875rem;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+}
+
+.original-price.is-placeholder {
+  visibility: hidden;
 }
 
 .product-meta {
