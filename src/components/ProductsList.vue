@@ -84,6 +84,34 @@ const clearAllSearchAndFilters = () => {
   searchOpen.value = false
 }
 
+const loadRecentlyViewed = () => {
+  try {
+    const saved = localStorage.getItem('recentlyViewed')
+    recentlyViewed.value = saved ? JSON.parse(saved) : []
+  } catch {
+    recentlyViewed.value = []
+  }
+}
+
+const persistRecentlyViewed = () => {
+  if (!Array.isArray(recentlyViewed.value) || recentlyViewed.value.length === 0) {
+    localStorage.removeItem('recentlyViewed')
+    return
+  }
+  localStorage.setItem('recentlyViewed', JSON.stringify(recentlyViewed.value))
+}
+
+const clearRecentlyViewed = () => {
+  recentlyViewed.value = []
+  localStorage.removeItem('recentlyViewed')
+}
+
+const removeRecentlyViewed = (id) => {
+  const numericId = Number(id)
+  recentlyViewed.value = recentlyViewed.value.filter(p => p.id !== numericId)
+  persistRecentlyViewed()
+}
+
 const shareProduct = async (prod) => {
   const url = window.location.origin + '/product/' + prod.id
   const shareData = {
@@ -287,10 +315,10 @@ const formatStock = (value) => {
 
 const clipText = (value, maxLength) => {
   const raw = String(value || '').trim()
-  const withoutTrailingCommas = raw.replace(/\s*,+\s*$/g, '')
-  if (withoutTrailingCommas.length <= maxLength) return withoutTrailingCommas
+  const normalized = raw.replace(/[\s,;:]+$/g, '')
+  if (normalized.length <= maxLength) return normalized
 
-  const clipped = withoutTrailingCommas.slice(0, maxLength).trim().replace(/\s*,+\s*$/g, '')
+  const clipped = normalized.slice(0, maxLength).trim().replace(/[\s,;:]+$/g, '')
   return `${clipped}…`
 }
 
@@ -303,8 +331,8 @@ const titleMaxLength = computed(() => {
 })
 
 const descriptionMaxLength = computed(() => {
-  if (viewportWidth.value <= 480) return 60
-  if (viewportWidth.value <= 768) return 85
+  if (viewportWidth.value <= 480) return 50
+  if (viewportWidth.value <= 768) return 75
   return 110
 })
 
@@ -428,10 +456,7 @@ onMounted(async () => {
   }
 
   // Load recently viewed
-  const savedViewed = localStorage.getItem('recentlyViewed')
-  if (savedViewed) {
-    recentlyViewed.value = JSON.parse(savedViewed)
-  }
+  loadRecentlyViewed()
 
   // Load itemsPerPage from localStorage
   const savedItemsPerPage = localStorage.getItem('itemsPerPage')
@@ -1043,24 +1068,36 @@ watch(() => filteredProducts.value, () => {
     <div v-if="recentlyViewed.length > 0" class="recently-viewed-section">
       <div class="section-header">
         <h3>Recently Viewed</h3>
-        <span class="viewed-count">{{ recentlyViewed.length }} items</span>
+        <div class="viewed-actions">
+          <button type="button" class="viewed-clear" @click="clearRecentlyViewed">Clear</button>
+          <span class="viewed-count">{{ recentlyViewed.length }} items</span>
+        </div>
       </div>
       <div v-if="recentlyViewed.length > 0" class="viewed-scroll-container">
         <div class="viewed-row">
-          <RouterLink 
-            v-for="p in recentlyViewed" 
-            :key="p.id" 
-            :to="'/product/' + p.id"
-            class="viewed-card"
-          >
-            <div class="viewed-thumb-wrapper">
-              <img :src="p.thumbnail || (p.images && p.images[0])" :alt="p.title" class="viewed-thumb" loading="lazy" decoding="async">
-            </div>
-            <div class="viewed-info">
-              <h4>{{ p.title }}</h4>
-              <p>£{{ p.price.toLocaleString('en-US', { minimumFractionDigits: 2 }) }}</p>
-            </div>
-          </RouterLink>
+          <div v-for="p in recentlyViewed" :key="p.id" class="viewed-card-wrapper">
+            <button
+              type="button"
+              class="viewed-remove"
+              :aria-label="`Remove ${p.title} from recently viewed`"
+              title="Remove"
+              @click.stop.prevent="removeRecentlyViewed(p.id)"
+            >
+              ✕
+            </button>
+            <RouterLink
+              :to="'/product/' + p.id"
+              class="viewed-card"
+            >
+              <div class="viewed-thumb-wrapper">
+                <img :src="p.thumbnail || (p.images && p.images[0])" :alt="p.title" class="viewed-thumb" loading="lazy" decoding="async">
+              </div>
+              <div class="viewed-info">
+                <h4>{{ p.title }}</h4>
+                <p>£{{ p.price.toLocaleString('en-US', { minimumFractionDigits: 2 }) }}</p>
+              </div>
+            </RouterLink>
+          </div>
         </div>
       </div>
     </div>
@@ -2054,18 +2091,34 @@ header {
     overflow: hidden;
     max-height: calc(1.5em * 2);
     min-height: calc(1.5em * 2);
+    overflow-wrap: anywhere;
     margin-bottom: 0.5rem;
   }
 
-  .product-meta {
-    gap: 0.5rem;
-    margin-bottom: 0.25rem;
+  .product-badges {
     flex-wrap: nowrap;
+    gap: 0.25rem;
+    left: 0.5rem;
+    right: 0.5rem;
+    top: 0.5rem;
+  }
+
+  .badge-tag {
+    font-size: 0.625rem;
+    padding: 0.1875rem 0.375rem;
+    letter-spacing: 0;
+  }
+
+  .product-meta {
+    gap: 0.375rem;
+    margin-bottom: 0.25rem;
+    flex-wrap: wrap;
+    justify-content: flex-start;
   }
 
   .meta-pill {
-    font-size: 0.6875rem;
-    padding: 0.3125rem 0.5rem;
+    font-size: 0.625rem;
+    padding: 0.25rem 0.4375rem;
   }
 }
 
@@ -2493,15 +2546,14 @@ header {
   }
 
   .compare-bar-info {
-    flex: 0 0 auto;
-    gap: 0.5rem;
+    display: none;
   }
 
   .compare-bar-thumbs {
     flex: 1 1 auto;
     min-width: 0;
     gap: 0.375rem;
-    padding: 0.5rem 0.125rem 0.25rem;
+    padding: 0.5rem 0 0.25rem;
   }
 
   .compare-bar-thumb {
@@ -2669,9 +2721,29 @@ header {
   margin: 0;
 }
 
+.viewed-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
 .viewed-count {
   font-size: 0.875rem;
   color: #666;
+}
+
+.viewed-clear {
+  background: none;
+  border: none;
+  color: #4db8ff;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 0.25rem 0.5rem;
+}
+
+.viewed-clear:hover {
+  text-decoration: underline;
 }
 
 .viewed-scroll-container {
@@ -2700,6 +2772,11 @@ header {
   width: max-content;
 }
 
+.viewed-card-wrapper {
+  position: relative;
+  width: 10rem;
+}
+
 .viewed-card {
   width: 10rem;
   display: flex;
@@ -2720,6 +2797,27 @@ header {
   border-radius: 0.75rem;
   overflow: hidden;
   border: 0.0625rem solid #333;
+}
+
+.viewed-remove {
+  position: absolute;
+  top: 0.375rem;
+  right: 0.375rem;
+  width: 1.625rem;
+  height: 1.625rem;
+  border-radius: 50%;
+  border: none;
+  background-color: rgba(0, 0, 0, 0.65);
+  color: #eee;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2;
+}
+
+.viewed-remove:hover {
+  background-color: rgba(255, 107, 107, 0.9);
 }
 
 .viewed-thumb {
