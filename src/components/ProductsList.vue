@@ -339,6 +339,117 @@ const descriptionMaxLength = computed(() => {
 const formatTitle = (value) => clipText(value, titleMaxLength.value)
 const formatDescription = (value) => clipText(value, descriptionMaxLength.value)
 
+const fittedDescriptionById = ref({})
+
+let fitDescriptionsTimer = null
+
+const makeMeasureBox = (sourceEl) => {
+  const style = getComputedStyle(sourceEl)
+  const box = document.createElement('div')
+  box.style.position = 'fixed'
+  box.style.left = '-9999px'
+  box.style.top = '-9999px'
+  box.style.visibility = 'hidden'
+  box.style.pointerEvents = 'none'
+  box.style.overflow = 'hidden'
+  box.style.boxSizing = style.boxSizing
+  box.style.width = `${sourceEl.clientWidth}px`
+  box.style.height = `${sourceEl.clientHeight}px`
+  box.style.fontFamily = style.fontFamily
+  box.style.fontSize = style.fontSize
+  box.style.fontWeight = style.fontWeight
+  box.style.fontStyle = style.fontStyle
+  box.style.letterSpacing = style.letterSpacing
+  box.style.lineHeight = style.lineHeight
+  box.style.textTransform = style.textTransform
+  box.style.wordBreak = style.wordBreak
+  box.style.overflowWrap = style.overflowWrap
+  box.style.whiteSpace = style.whiteSpace
+  box.style.padding = style.padding
+  box.style.border = style.border
+  document.body.appendChild(box)
+  return box
+}
+
+const fitsInBox = (measureBox) => {
+  return measureBox.scrollHeight <= measureBox.clientHeight + 1
+}
+
+const mapsEqual = (a, b) => {
+  const aKeys = Object.keys(a || {})
+  const bKeys = Object.keys(b || {})
+  if (aKeys.length !== bKeys.length) return false
+  for (const k of aKeys) {
+    if (a[k] !== b[k]) return false
+  }
+  return true
+}
+
+const fitDescriptions = () => {
+  const nodes = Array.from(document.querySelectorAll('.products-grid .product-description[data-product-id]'))
+  if (nodes.length === 0) return
+
+  const next = {}
+
+  for (const el of nodes) {
+    const id = Number(el.dataset.productId)
+    if (!Number.isFinite(id)) continue
+
+    const prod = paginatedProducts.value.find(p => p.id === id)
+    if (!prod) continue
+
+    const original = String(prod.description || '').trim()
+    const normalized = original.replace(/[\s,;:]+$/g, '')
+    if (!normalized) {
+      next[id] = ''
+      continue
+    }
+
+    const measureBox = makeMeasureBox(el)
+
+    let candidate = formatDescription(normalized)
+    measureBox.textContent = candidate
+
+    if (fitsInBox(measureBox)) {
+      next[id] = candidate
+      measureBox.remove()
+      continue
+    }
+
+    let low = 0
+    let high = normalized.length
+    let best = clipText(normalized, 1)
+
+    while (low <= high) {
+      const mid = Math.floor((low + high) / 2)
+      candidate = clipText(normalized, mid)
+      measureBox.textContent = candidate
+      if (fitsInBox(measureBox)) {
+        best = candidate
+        low = mid + 1
+      } else {
+        high = mid - 1
+      }
+    }
+
+    next[id] = best
+    measureBox.remove()
+  }
+
+  if (!mapsEqual(fittedDescriptionById.value, next)) {
+    fittedDescriptionById.value = next
+  }
+}
+
+const scheduleFitDescriptions = (delay = 0) => {
+  if (fitDescriptionsTimer) clearTimeout(fitDescriptionsTimer)
+  fitDescriptionsTimer = setTimeout(() => {
+    nextTick(() => {
+      requestAnimationFrame(() => fitDescriptions())
+    })
+  }, delay)
+}
+
 const toggleFavorite = (productId) => {
   productStore.toggleFavorite(productId)
 }
@@ -403,6 +514,7 @@ const checkScroll = () => {
   
   isScrollable.value = scrollHeight > clientHeight + 10 // Small buffer
   isAtBottom.value = scrollTop + clientHeight >= scrollHeight - 50
+  scheduleFitDescriptions(0)
 }
 
 let persistSearchTimer = null
@@ -467,6 +579,8 @@ onMounted(async () => {
   window.addEventListener('scroll', checkScroll, { passive: true })
   window.addEventListener('resize', checkScroll)
   scheduleCheckScroll(50)
+  scheduleFitDescriptions(50)
+  scheduleFitDescriptions(500)
 })
 
 // Watch for category changes in the URL
@@ -485,6 +599,7 @@ onBeforeUnmount(() => {
   if (pressTimer) clearTimeout(pressTimer)
   if (scrollCheckTimer) clearTimeout(scrollCheckTimer)
   if (persistSearchTimer) clearTimeout(persistSearchTimer)
+  if (fitDescriptionsTimer) clearTimeout(fitDescriptionsTimer)
 })
 
 // computed list filtered by search and sorted by selection
@@ -563,6 +678,7 @@ const prevPage = () => {
 watch(() => productStore.allProducts, (val) => {
   productList.value = val || []
   scheduleCheckScroll(100)
+  scheduleFitDescriptions(100)
 })
 
 // Persist search text as user types (even before Enter)
@@ -572,12 +688,21 @@ watch(inputText, (newVal) => {
     localStorage.setItem('lastSearch', newVal)
   }, 200)
   scheduleCheckScroll(100)
+  scheduleFitDescriptions(100)
 })
 
 // watch filtered products to update scroll state
 watch(() => filteredProducts.value, () => {
   scheduleCheckScroll(100)
+  scheduleFitDescriptions(100)
 })
+
+watch(
+  () => paginatedProducts.value.map(p => p.id).join(','),
+  () => {
+    scheduleFitDescriptions(0)
+  }
+)
 
 </script>
 
@@ -1013,7 +1138,7 @@ watch(() => filteredProducts.value, () => {
                         £{{ (p.price / (1 - p.discountPercentage / 100)).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }}
                       </p>
                     </div>
-                    <p class="product-description">{{ formatDescription(p.description) }}</p>
+                    <p class="product-description" :data-product-id="p.id">{{ fittedDescriptionById[p.id] ?? formatDescription(p.description) }}</p>
                     <div class="product-meta">
                       <span class="meta-pill product-rating">⭐ {{ productStore.formatRating(p.rating) }}</span>
                       <span class="meta-pill product-stock" :class="{ 'low-stock': p.stock < 10 }">
@@ -2040,6 +2165,18 @@ header {
   padding: 0 1rem;
 }
 
+.product-info {
+  height: 13.25rem;
+}
+
+.product-description {
+  margin-bottom: 0.5rem;
+}
+
+.product-meta {
+  margin-top: auto;
+}
+
 .products-grid-inner {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(17.5rem, 1fr));
@@ -2061,6 +2198,7 @@ header {
 
   .product-info {
     padding: 0.875rem;
+    height: 11.5rem;
   }
 
   .product-title {
@@ -2097,28 +2235,45 @@ header {
 
   .product-badges {
     flex-wrap: nowrap;
-    gap: 0.25rem;
-    left: 0.5rem;
-    right: 0.5rem;
-    top: 0.5rem;
+    gap: 0.1875rem;
+    left: 0.375rem;
+    right: 0.375rem;
+    top: 0.375rem;
+    overflow: hidden;
   }
 
   .badge-tag {
-    font-size: 0.625rem;
-    padding: 0.1875rem 0.375rem;
+    font-size: 0.5625rem;
+    padding: 0.125rem 0.3125rem;
     letter-spacing: 0;
+    flex: 0 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .product-meta {
-    gap: 0.375rem;
+    gap: 0.25rem;
     margin-bottom: 0.25rem;
-    flex-wrap: wrap;
-    justify-content: flex-start;
+    flex-wrap: nowrap;
+    justify-content: space-between;
   }
 
   .meta-pill {
-    font-size: 0.625rem;
-    padding: 0.25rem 0.4375rem;
+    font-size: 0.5625rem;
+    padding: 0.1875rem 0.375rem;
+    flex: 0 0 auto;
+  }
+
+  .product-rating {
+    flex: 0 0 auto;
+  }
+
+  .product-stock {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 }
 
@@ -2412,7 +2567,7 @@ header {
   border: 0.125rem solid #4db8ff;
   border-radius: 1rem;
   box-shadow: 0 0.5rem 2rem rgba(0, 0, 0, 0.5);
-  padding: 0.75rem 1.25rem;
+  padding: 0.5rem 0.75rem;
   backdrop-filter: blur(0.625rem);
 }
 
@@ -2420,7 +2575,7 @@ header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 1.5rem;
+  gap: 1rem;
 }
 
 .compare-bar-info {
@@ -2441,11 +2596,11 @@ header {
 
 .compare-bar-thumbs {
   display: flex;
-  gap: 0.5rem;
+  gap: 0.375rem;
   flex: 1;
   overflow-x: auto;
   overflow-y: visible;
-  padding: 0.5rem 0.25rem 0.25rem;
+  padding: 0.25rem 0.25rem;
 }
 
 .compare-bar-thumb-wrapper {
@@ -2454,8 +2609,8 @@ header {
 }
 
 .compare-bar-thumb {
-  width: 2.5rem;
-  height: 2.5rem;
+  width: 2.75rem;
+  height: 2.75rem;
   object-fit: cover;
   border-radius: 0.25rem;
   border: 0.0625rem solid #444;
@@ -2557,8 +2712,8 @@ header {
   }
 
   .compare-bar-thumb {
-    width: 2.25rem;
-    height: 2.25rem;
+    width: 3rem;
+    height: 3rem;
   }
 
   .compare-bar-actions {
