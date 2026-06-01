@@ -8,7 +8,7 @@ Browse products, search and filter, compare items, manage a wishlist, and add it
 
 
 
-**Live site**:
+**Live site**: https://d-neale.github.io/ecommerce-webapp/
 
 
 
