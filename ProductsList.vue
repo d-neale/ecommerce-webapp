@@ -2287,13 +2287,16 @@ header {
     overflow: visible;
     min-width: 0;
     max-width: 100%;
+    white-space: normal;
   }
 
   .products-grid .product-info .meta-pill.product-stock .stock-count,
   .products-grid .product-info .meta-pill.product-stock .stock-label {
     display: block;
-    white-space: nowrap;
+    white-space: normal;
     overflow: visible;
+    overflow-wrap: anywhere;
+    word-break: break-word;
   }
 
   .products-grid .product-info .meta-pill.product-stock {
