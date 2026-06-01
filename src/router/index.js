@@ -38,7 +38,7 @@ const router = createRouter({
 })
 
 router.afterEach((to) => {
-  const baseTitle = 'Enigma Shop'
+  const baseTitle = 'Ecommerce Webapp'
   const pageTitle = to.meta && to.meta.title ? String(to.meta.title) : ''
   document.title = pageTitle ? `${pageTitle} | ${baseTitle}` : baseTitle
 })

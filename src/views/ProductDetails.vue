@@ -1,7 +1,7 @@
 <script setup>
 import { ref, onMounted, onBeforeUnmount, computed, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { useProducts } from '../main.js'
+import { useProducts } from '../stores/products.js'
 
 const route = useRoute()
 const router = useRouter()
@@ -91,6 +91,54 @@ const isFavorited = computed(() => {
   return product.value ? productStore.favorites.includes(product.value.id) : false
 })
 
+const productCode = computed(() => {
+  const p = product.value
+  if (!p) return ''
+  return p.sku || p.meta?.barcode || String(p.id || '')
+})
+
+const productInfoRows = computed(() => {
+  const p = product.value
+  if (!p) return []
+
+  const rows = []
+  const push = (label, value) => {
+    if (value === undefined || value === null) return
+    const v = String(value).trim()
+    if (!v) return
+    rows.push({ label, value: v })
+  }
+
+  push('Product Code', p.sku || p.id)
+  push('Brand', p.brand)
+  push('Category', p.category)
+  push('Availability', p.availabilityStatus)
+  push('Stock', Number.isFinite(Number(p.stock)) ? String(p.stock) : p.stock)
+  push('Weight', p.weight)
+
+  if (p.dimensions && (p.dimensions.width || p.dimensions.height || p.dimensions.depth)) {
+    const w = p.dimensions.width ?? ''
+    const h = p.dimensions.height ?? ''
+    const d = p.dimensions.depth ?? ''
+    push('Dimensions', `${w}×${h}×${d}`)
+  }
+
+  if (Array.isArray(p.tags) && p.tags.length > 0) {
+    push('Tags', p.tags.join(', '))
+  }
+
+  push('Warranty', p.warrantyInformation)
+  push('Shipping', p.shippingInformation)
+  push('Return Policy', p.returnPolicy)
+  push('Minimum Order', p.minimumOrderQuantity)
+
+  push('Barcode', p.meta?.barcode)
+  push('Updated', p.meta?.updatedAt)
+  push('Created', p.meta?.createdAt)
+
+  return rows
+})
+
 const addToRecentlyViewed = (prod) => {
   let viewed = JSON.parse(localStorage.getItem('recentlyViewed') || '[]')
   viewed = viewed.filter(p => p.id !== prod.id)
@@ -111,7 +159,6 @@ const loadProduct = async () => {
   const found = productStore.getProductbyID(id)
   if (found) {
     product.value = found
-    document.title = `${found.title} | Enigma Shop`
     addToRecentlyViewed(found)
     activeImageIndex.value = 0
   }
@@ -304,12 +351,15 @@ const formatDate = (dateStr) => {
           <h1 class="product-title">{{ product.title }}</h1>
           <div class="meta-row">
             <span class="brand">{{ product.brand || 'Premium Collection' }}</span>
+            <span v-if="productCode" class="product-code">{{ productCode }}</span>
             <div class="rating-summary">
               <span class="stars">⭐ {{ productStore.formatRating(product.rating) }}</span>
               <span class="review-count">({{ product.reviews?.length || 0 }} Reviews)</span>
             </div>
           </div>
         </div>
+
+        <div class="detail-divider"></div>
 
         <div class="price-box">
           <div class="current-price">£{{ product.price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }}</div>
@@ -321,6 +371,8 @@ const formatDate = (dateStr) => {
             {{ product.stock > 0 ? `${product.stock} in stock` : 'Out of Stock' }}
           </div>
         </div>
+
+        <div class="detail-divider"></div>
 
         <div class="action-section">
           <div class="quantity-picker">
@@ -347,10 +399,14 @@ const formatDate = (dateStr) => {
           </button>
         </div>
 
+        <div class="detail-divider"></div>
+
         <div class="product-description">
           <h3>Description</h3>
           <p>{{ product.description }}</p>
         </div>
+
+        <div class="detail-divider"></div>
 
         <div class="key-features">
           <div class="feature">
@@ -376,7 +432,19 @@ const formatDate = (dateStr) => {
           </div>
         </div>
       </div>
+
+      <div v-if="productInfoRows.length > 0" class="product-data">
+        <h3>Product Information</h3>
+        <div class="product-data-grid">
+          <div v-for="row in productInfoRows" :key="row.label" class="data-row">
+            <div class="data-label">{{ row.label }}</div>
+            <div class="data-value">{{ row.value }}</div>
+          </div>
+        </div>
+      </div>
     </div>
+
+    <div class="detail-divider"></div>
 
     <section v-if="youMayAlsoLike.length > 0" class="you-may-also-like">
       <div class="ymal-header">
@@ -497,9 +565,10 @@ const formatDate = (dateStr) => {
 <style scoped>
 /* Layout */
 .product-page {
-  max-width: 75rem;
-  margin: 0 auto;
+  max-width: 100%;
+  margin: 0;
   padding: 0 1.25rem 2rem;
+  text-align: left;
 }
 
 /* Header */
@@ -514,8 +583,8 @@ const formatDate = (dateStr) => {
 }
 
 .header-content-inner {
-  max-width: 75rem;
-  margin: 0 auto;
+  max-width: 100%;
+  margin: 0;
   padding: 0 1.25rem;
   display: flex;
   justify-content: space-between;
@@ -530,6 +599,59 @@ const formatDate = (dateStr) => {
 .header-right {
   display: flex;
   gap: 1rem;
+}
+
+.product-code {
+  color: #666;
+  font-size: 0.875rem;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: center;
+  justify-self: center;
+}
+
+.product-data {
+  background-color: #2a2a2a;
+  border: 0.125rem solid #424242;
+  border-radius: 0.75rem;
+  padding: 1.25rem;
+  align-self: flex-start;
+  width: 100%;
+  margin-top: 0.75rem;
+}
+
+.product-data h3 {
+  margin: 0 0 1rem 0;
+  color: #eee;
+}
+
+.product-data-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.75rem;
+}
+
+.data-row {
+  display: flex;
+  justify-content: flex-start;
+  align-items: baseline;
+  gap: 1rem;
+}
+
+.data-label {
+  color: #888;
+  font-size: 0.875rem;
+  flex: 0 0 auto;
+  min-width: 10rem;
+}
+
+.data-value {
+  color: #eee;
+  font-size: 0.875rem;
+  text-align: left;
+  min-width: 0;
 }
 
 .back-text-short { display: none; }
@@ -595,14 +717,43 @@ const formatDate = (dateStr) => {
 .product-container {
   display: grid;
   grid-template-columns: 1fr 1fr;
+  grid-template-rows: auto auto;
+  align-items: start;
   gap: 4rem;
   margin-bottom: 5rem;
+}
+
+.product-visuals {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.product-info-detailed {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+}
+
+.product-data {
+  grid-column: 1;
+  grid-row: 2;
 }
 
 @media (max-width: 56.25rem) {
   .product-container {
     grid-template-columns: 1fr;
+    grid-template-rows: auto;
     gap: 2.5rem;
+  }
+
+  .product-visuals,
+  .product-info-detailed,
+  .product-data {
+    grid-column: auto;
+    grid-row: auto;
+  }
+
+  .product-data {
+    margin-top: 0.5rem;
   }
 }
 
@@ -611,6 +762,7 @@ const formatDate = (dateStr) => {
   display: flex;
   flex-direction: column;
   gap: 1.25rem;
+  min-width: 0;
 }
 
 .main-image-wrapper {
@@ -623,6 +775,7 @@ const formatDate = (dateStr) => {
   border: 0.125rem solid #424242;
   padding: 0.75rem;
   transform: none;
+  max-width: 100%;
 }
 
 .main-image-wrapper:hover,
@@ -635,6 +788,8 @@ const formatDate = (dateStr) => {
   height: 100%;
   object-fit: contain;
   transition: filter 0.3s ease;
+  display: block;
+  max-width: 100%;
 }
 
 .main-image-wrapper:hover .main-image {
@@ -659,6 +814,8 @@ const formatDate = (dateStr) => {
   overflow-x: auto;
   padding-top: 0.25rem;
   padding-bottom: 0.5rem;
+  max-width: 100%;
+  min-width: 0;
 }
 
 .thumb-btn {
@@ -678,11 +835,40 @@ const formatDate = (dateStr) => {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  display: block;
 }
 
 .thumb-btn.active {
   border-color: #4db8ff;
   transform: translateY(-0.125rem);
+}
+
+@media (max-width: 30rem) {
+  .product-page {
+    padding: 0 0.875rem 2rem;
+  }
+
+  .detail-header {
+    margin: 0 -0.875rem 2rem;
+  }
+
+  .main-image-wrapper {
+    padding: 0.5rem;
+  }
+
+  .image-thumbnails {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(3.5rem, 1fr));
+    gap: 0.5rem;
+    overflow-x: hidden;
+    padding-bottom: 0;
+  }
+
+  .thumb-btn {
+    width: 100%;
+    height: auto;
+    aspect-ratio: 1;
+  }
 }
 
 /* Badges */
@@ -716,37 +902,102 @@ const formatDate = (dateStr) => {
 .product-info-detailed {
   display: flex;
   flex-direction: column;
-  gap: 2rem;
+  gap: 1.5rem;
+}
+
+.info-header {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
 }
 
 .product-title {
   font-size: 2.5rem;
   font-weight: 800;
-  line-height: 1.1;
-  margin: 0 0 0.75rem 0;
+  line-height: 1;
+  margin: 0 0 0.25rem 0;
+  padding: 0;
+  display: block;
+  overflow: visible;
+  max-height: none;
+  min-height: 0;
 }
 
 .meta-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
+  margin-top: 0;
+  gap: 0.5rem;
 }
 
 .brand {
   font-size: 1.1rem;
   color: #aaa;
   font-weight: 600;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.meta-row > .brand {
+  justify-self: start;
+}
+
+.meta-row > .product-code {
+  justify-self: center;
 }
 
 .rating-summary {
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  justify-content: flex-end;
+  justify-self: end;
+  white-space: nowrap;
 }
 
 .stars { color: #ffc107; font-weight: 700; }
 .review-count { color: #666; font-size: 0.9rem; }
+
+.detail-divider {
+  height: 0.0625rem;
+  background-color: #333;
+  width: 100%;
+}
+
+@media (max-width: 48rem) {
+  .meta-row {
+    grid-template-columns: 1fr;
+    align-items: flex-start;
+    margin-top: 0;
+    gap: 0.125rem;
+  }
+
+  .meta-row > .brand,
+  .meta-row > .product-code,
+  .meta-row > .rating-summary {
+    justify-self: start;
+  }
+
+  .brand,
+  .product-code,
+  .rating-summary {
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+  }
+
+  .product-code {
+    text-align: left;
+  }
+
+  .rating-summary {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
+}
 
 .price-box {
   background-color: #2a2a2a;
@@ -869,6 +1120,18 @@ const formatDate = (dateStr) => {
   transition: all 0.3s;
 }
 
+.favorite-toggle-btn:active {
+  transform: scale(0.97);
+}
+
+@media (hover: hover) {
+  .favorite-toggle-btn:hover {
+    background-color: #3a3a3a;
+    border-color: #777;
+    transform: translateY(-0.125rem);
+  }
+}
+
 .favorite-toggle-btn.active {
   background-color: rgba(255, 107, 107, 0.1);
   border-color: #ff6b6b;
@@ -909,12 +1172,15 @@ const formatDate = (dateStr) => {
 .ymal-header h2 {
   margin: 0;
   font-size: 1.5rem;
+  overflow-wrap: anywhere;
 }
 
 .ymal-subtitle {
   color: #777;
   font-size: 0.875rem;
   font-weight: 600;
+  display: block;
+  overflow-wrap: anywhere;
 }
 
 .ymal-row {
@@ -926,6 +1192,19 @@ const formatDate = (dateStr) => {
 @media (max-width: 56rem) {
   .ymal-row {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 40rem) {
+  .ymal-header {
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: flex-start;
+    gap: 0.25rem;
+  }
+
+  .ymal-subtitle {
+    width: 100%;
   }
 }
 

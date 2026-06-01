@@ -1,6 +1,6 @@
 <script setup>
 import { computed } from 'vue'
-import { useProducts } from '../main.js'
+import { useProducts } from '../stores/products.js'
 
 const productStore = useProducts()
 
@@ -39,6 +39,14 @@ const checkout = () => {
             <span class="separator">/</span>
             <span class="current">Shopping Cart</span>
           </nav>
+        </div>
+        <div class="header-right">
+          <div class="actions-wrapper">
+            <RouterLink to="/wishlist" class="header-btn wishlist-link" title="View Wishlist">
+              <span class="btn-icon">♥</span>
+              <span class="badge" v-if="productStore.favorites.length > 0">{{ productStore.favorites.length }}</span>
+            </RouterLink>
+          </div>
         </div>
       </div>
     </header>
@@ -105,18 +113,24 @@ const checkout = () => {
 }
 
 .cart-main {
-  max-width: 75rem;
   width: 100%;
-  margin: 0 auto;
-  padding: 1.5rem 1.875rem;
   flex: 1;
   display: flex;
+  flex-direction: column;
+  max-width: 87.5rem;
+  margin: 0 auto;
+  padding: 1.5rem 1.875rem;
+}
+
+header {
+  padding: 0.75rem 1rem;
 }
 
 .header-left {
   display: flex;
   align-items: center;
   gap: 1.25rem;
+  min-width: 0;
 }
 
 .back-text-short { display: none; }
@@ -124,12 +138,74 @@ const checkout = () => {
 @media (max-width: 48rem) {
   .back-text-long { display: none; }
   .back-text-short { display: inline; }
+
+  .header-content {
+    flex-direction: row;
+    align-items: center;
+    flex-wrap: nowrap;
+    gap: 0.75rem;
+  }
+
+  .header-right {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.75rem;
+    width: auto;
+  }
+
+  .header-left { flex: 1; min-width: 0; }
+
+  .actions-wrapper { width: auto; justify-content: flex-end; }
+
+  .actions-wrapper .header-btn {
+    width: 2.5rem;
+    height: 2.5rem;
+    font-size: 1.25rem;
+  }
+
+  .breadcrumbs {
+    flex: 1;
+    min-width: 0;
+    flex-wrap: nowrap;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    gap: 0.375rem;
+    font-size: 0.8125rem;
+  }
+
+  .breadcrumbs a,
+  .breadcrumbs .current,
+  .breadcrumbs .separator {
+    white-space: nowrap;
+  }
+
+  .cart-item {
+    padding: 1rem;
+    gap: 0.75rem;
+  }
+
+  .item-image {
+    width: 4rem;
+    height: 4rem;
+  }
+
+  .item-info {
+    min-width: 0;
+  }
+
+  .item-info h3 {
+    font-size: 1rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
 }
 
 .breadcrumbs {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
   gap: 0.5rem;
   font-size: 0.875rem;
   color: #999;
@@ -152,7 +228,6 @@ const checkout = () => {
 .empty-cart {
   text-align: center;
   padding: 1.25rem;
-  color: white;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -161,8 +236,27 @@ const checkout = () => {
   justify-content: center;
 }
 
+@media (max-width: 48rem) {
+  .empty-cart {
+    justify-content: flex-start;
+    padding-top: 1.5rem;
+    gap: 1rem;
+  }
+
+  .empty-illustration {
+    width: 7rem;
+    height: 7rem;
+  }
+
+  .empty-icon {
+    font-size: 3.5rem;
+  }
+}
+
 .browse-button {
-  max-width: 20rem; /* Reasonable width on desktop */
+  width: 100%;
+  max-width: 20rem;
+  margin: 0 auto;
 }
 
 .empty-illustration {
@@ -172,43 +266,35 @@ const checkout = () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-bottom: 1rem;
 }
 
 .illustration-circle {
   position: absolute;
   width: 100%;
   height: 100%;
-  background: radial-gradient(circle, rgba(77, 184, 255, 0.1) 0%, transparent 70%);
+  background: radial-gradient(circle, rgba(255, 107, 107, 0.1) 0%, transparent 70%);
   border-radius: 50%;
-  animation: pulse-glow 3s infinite ease-in-out;
+  animation: pulse-glow-heart 3s infinite ease-in-out;
 }
 
 .empty-icon {
   font-size: 5rem;
-  margin: 0;
+  color: #ff6b6b;
   z-index: 1;
-  filter: drop-shadow(0 0 1rem rgba(77, 184, 255, 0.3));
 }
 
-@keyframes pulse-glow {
+@keyframes pulse-glow-heart {
   0%, 100% { transform: scale(1); opacity: 0.5; }
   50% { transform: scale(1.1); opacity: 0.8; }
 }
 
-.empty-cart h2 {
-  margin: 0;
-}
-
-.empty-cart p {
-  margin: 0 0 0.625rem 0;
-}
-
 .cart-content {
   display: grid;
-  grid-template-columns: 1fr 21.875rem;
+  grid-template-columns: minmax(0, 1fr) 21.875rem;
   gap: 2.5rem;
   align-items: start;
+  width: 100%;
+  min-width: 0;
 }
 
 .cart-items-list {
@@ -216,6 +302,7 @@ const checkout = () => {
   border-radius: 0.75rem;
   overflow: hidden;
   border: 0.125rem solid #424242;
+  min-width: 0;
 }
 
 .cart-item {
@@ -224,6 +311,7 @@ const checkout = () => {
   padding: 1.25rem;
   border-bottom: 0.0625rem solid #424242;
   gap: 1.25rem;
+  min-width: 0;
 }
 
 .cart-item:last-child {
@@ -251,12 +339,16 @@ const checkout = () => {
 
 .item-info {
   flex: 1;
+  min-width: 0;
 }
 
 .item-info h3 {
   color: white;
   margin: 0 0 0.3125rem 0;
   font-size: 1.125rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .item-price {
@@ -323,6 +415,7 @@ const checkout = () => {
   padding: 1.5625rem;
   border: 0.125rem solid #424242;
   color: white;
+  min-width: 0;
 }
 
 .cart-summary h2 {

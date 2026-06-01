@@ -1,7 +1,7 @@
 <script setup>
 import { ref, onMounted, onBeforeUnmount, computed } from 'vue'
 import { RouterView } from 'vue-router'
-import { useProducts } from './main.js'
+import { useProducts } from './stores/products.js'
 
 const productStore = useProducts()
 const showBackToTop = ref(false)
@@ -102,9 +102,17 @@ onBeforeUnmount(() => {
         :class="note.type"
       >
         <span class="toast-icon">
-          {{ note.type === 'success' ? '✅' : note.type === 'error' ? '❌' : 'ℹ️' }}
+          {{ note.type === 'success' ? '✅' : note.type === 'error' ? '⚠️' : 'ℹ️' }}
         </span>
         <span class="toast-message">{{ note.message }}</span>
+        <button
+          type="button"
+          class="toast-close"
+          aria-label="Dismiss notification"
+          @click.stop="productStore.removeNotification(note.id)"
+        >
+          ✕
+        </button>
       </div>
     </transition-group>
   </div>
@@ -127,7 +135,7 @@ onBeforeUnmount(() => {
   position: fixed;
   top: 1.25rem;
   right: 1.25rem;
-  z-index: 9999;
+  z-index: 11000;
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
@@ -136,8 +144,8 @@ onBeforeUnmount(() => {
 
 .notification-toast {
   pointer-events: auto;
-  min-width: 18rem;
-  max-width: 25rem;
+  min-width: min(18rem, calc(100vw - 2.5rem));
+  max-width: min(25rem, calc(100vw - 2.5rem));
   background-color: #2a2a2a;
   color: white;
   padding: 1rem 1.25rem;
@@ -155,7 +163,22 @@ onBeforeUnmount(() => {
 .notification-toast.info { border-color: #ffb400; }
 
 .toast-icon { font-size: 1.25rem; }
-.toast-message { font-size: 0.9375rem; font-weight: 500; }
+.toast-message { font-size: 0.9375rem; font-weight: 500; flex: 1; min-width: 0; overflow-wrap: anywhere; }
+
+.toast-close {
+  background: none;
+  border: none;
+  color: #999;
+  font-size: 1.125rem;
+  line-height: 1;
+  padding: 0.25rem 0.5rem;
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+
+.toast-close:active {
+  transform: scale(0.95);
+}
 
 /* Mini Cart Sidebar Styles */
 .mini-cart-overlay {

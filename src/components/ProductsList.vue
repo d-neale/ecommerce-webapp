@@ -1,7 +1,7 @@
 <script setup>
 import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
-import { useProducts } from '../main.js'
+import { useProducts } from '../stores/products.js'
 import ProductContextMenu from './ProductContextMenu.vue'
 import ProductSkeleton from './ProductSkeleton.vue'
 
@@ -285,6 +285,32 @@ const formatStock = (value) => {
   return `${n.toLocaleString('en-US')} in stock`
 }
 
+const clipText = (value, maxLength) => {
+  const raw = String(value || '').trim()
+  const withoutTrailingCommas = raw.replace(/\s*,+\s*$/g, '')
+  if (withoutTrailingCommas.length <= maxLength) return withoutTrailingCommas
+
+  const clipped = withoutTrailingCommas.slice(0, maxLength).trim().replace(/\s*,+\s*$/g, '')
+  return `${clipped}…`
+}
+
+const viewportWidth = ref(typeof window !== 'undefined' ? window.innerWidth : 1024)
+
+const titleMaxLength = computed(() => {
+  if (viewportWidth.value <= 480) return 48
+  if (viewportWidth.value <= 768) return 58
+  return 70
+})
+
+const descriptionMaxLength = computed(() => {
+  if (viewportWidth.value <= 480) return 60
+  if (viewportWidth.value <= 768) return 85
+  return 110
+})
+
+const formatTitle = (value) => clipText(value, titleMaxLength.value)
+const formatDescription = (value) => clipText(value, descriptionMaxLength.value)
+
 const toggleFavorite = (productId) => {
   productStore.toggleFavorite(productId)
 }
@@ -342,6 +368,7 @@ const scheduleCheckScroll = (delay = 0) => {
 }
 
 const checkScroll = () => {
+  viewportWidth.value = window.innerWidth
   const scrollHeight = document.documentElement.scrollHeight
   const clientHeight = document.documentElement.clientHeight
   const scrollTop = window.scrollY || document.documentElement.scrollTop
@@ -535,155 +562,159 @@ watch(() => filteredProducts.value, () => {
       <h1>Products</h1>
       
       <div class="header-right">
-        <form ref="searchForm" @submit="handleSearchSubmit" class="search-form">
-          <div class="search-input-wrapper">
-            <input 
-            ref="searchInput"
-            v-model="inputText" 
-            @input="handleSearchInput"
-            @focus="handleSearchFocus"
-            :class="{ 'search-open': showSearchDropdown }"
-            type="text" 
-            id="textbox1"
-            :maxlength="MAX_SEARCH_LENGTH"
-            placeholder="Search by product name..."> 
-            <button
-              v-if="inputText.length > 0"
-              type="button"
-              class="clear-btn"
-              title="Clear search"
-              @mousedown.prevent.stop="clearSearch(true)"
-              @click.prevent.stop="clearSearch(true)"
-            >
-              ✕
-            </button>
-            <span class="char-count">{{ inputText.length }}/{{ MAX_SEARCH_LENGTH }}</span>
+        <div class="header-row top-row">
+          <form ref="searchForm" @submit="handleSearchSubmit" class="search-form">
+            <div class="search-input-wrapper">
+              <input 
+              ref="searchInput"
+              v-model="inputText" 
+              @input="handleSearchInput"
+              @focus="handleSearchFocus"
+              :class="{ 'search-open': showSearchDropdown }"
+              type="text" 
+              id="textbox1"
+              :maxlength="MAX_SEARCH_LENGTH"
+              placeholder="Search by product name..."> 
+              <button
+                v-if="inputText.length > 0"
+                type="button"
+                class="clear-btn"
+                title="Clear search"
+                @mousedown.prevent.stop="clearSearch(true)"
+                @click.prevent.stop="clearSearch(true)"
+              >
+                ✕
+              </button>
+              <span class="char-count">{{ inputText.length }}/{{ MAX_SEARCH_LENGTH }}</span>
 
-            <!-- Search Dropdown -->
-            <div v-if="showSearchDropdown" class="search-dropdown">
-              <div v-if="searchSuggestions.length > 0" class="dropdown-section">
-                <div class="section-title">Suggestions</div>
-                <div 
-                  v-for="s in searchSuggestions" 
-                  :key="s.id" 
-                  class="dropdown-item"
-                  @mousedown="selectSuggestion(s)"
-                >
-                  <img :src="s.thumbnail" class="item-thumb" loading="lazy" decoding="async">
-                  <span class="item-title">{{ s.title }}</span>
-                </div>
-              </div>
-
-              <div v-if="searchHistory.length > 0" class="dropdown-section">
-                <div class="section-header">
-                  <div class="section-title">Recent Searches</div>
-                  <button type="button" class="clear-history" @mousedown="clearHistory">Clear</button>
-                </div>
-                <div 
-                  v-for="h in searchHistory" 
-                  :key="h" 
-                  class="dropdown-item history-item"
-                  @mousedown="inputText = h; handleSearchSubmit()"
-                >
-                  <span class="history-icon">🕒</span>
-                  <span class="item-title">{{ h }}</span>
-                  <button
-                    type="button"
-                    class="history-remove"
-                    title="Remove"
-                    @mousedown.stop.prevent="removeHistoryItem(h)"
+              <div v-if="showSearchDropdown" class="search-dropdown">
+                <div v-if="searchSuggestions.length > 0" class="dropdown-section">
+                  <div class="section-title">Suggestions</div>
+                  <div 
+                    v-for="s in searchSuggestions" 
+                    :key="s.id" 
+                    class="dropdown-item"
+                    @mousedown="selectSuggestion(s)"
                   >
-                    ✕
-                  </button>
+                    <img :src="s.thumbnail" class="item-thumb" loading="lazy" decoding="async">
+                    <span class="item-title">{{ s.title }}</span>
+                  </div>
+                </div>
+
+                <div v-if="searchHistory.length > 0" class="dropdown-section">
+                  <div class="section-header">
+                    <div class="section-title">Recent Searches</div>
+                    <button type="button" class="clear-history" @mousedown="clearHistory">Clear</button>
+                  </div>
+                  <div 
+                    v-for="h in searchHistory" 
+                    :key="h" 
+                    class="dropdown-item history-item"
+                    @mousedown="inputText = h; handleSearchSubmit()"
+                  >
+                    <span class="history-icon">🕒</span>
+                    <span class="item-title">{{ h }}</span>
+                    <button
+                      type="button"
+                      class="history-remove"
+                      title="Remove"
+                      @mousedown.stop.prevent="removeHistoryItem(h)"
+                    >
+                      ✕
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-        </form>
+          </form>
 
-        <div class="sort-select" ref="sortMenu">
-          <button
-            type="button"
-            class="sort-trigger"
-            @click="toggleSortMenu"
-            :aria-expanded="sortOpen"
-            aria-haspopup="listbox"
-          >
-            <span class="trigger-text">{{ sortOptions.find(option => option.value === sortBy)?.label || 'Sort by price...' }}</span>
-            <span class="sort-arrow">▾</span>
-          </button>
-          <div v-if="sortOpen" class="sort-options" role="listbox">
-            <button
-              v-for="option in sortOptions"
-              :key="option.value"
-              type="button"
-              class="sort-option"
-              :class="{ selected: option.value === sortBy }"
-              @click="selectSortOption(option.value)"
-            >
-              {{ option.label }}
-            </button>
-          </div>
+          <RouterLink to="/wishlist" class="header-btn wishlist-link" title="View Wishlist">
+            <span class="btn-icon">♥</span>
+            <span class="badge" v-if="productStore.favorites.length > 0">{{ productStore.favorites.length }}</span>
+          </RouterLink>
+
+          <RouterLink to="/cart" class="header-btn cart-link" title="View Cart">
+            <span class="btn-icon">🛒</span>
+            <span class="badge" v-if="productStore.cart.length > 0">{{ productStore.cart.length }}</span>
+          </RouterLink>
         </div>
 
-        <div class="pagination-select" ref="paginationMenu">
-          <button
-            type="button"
-            class="sort-trigger"
-            @click="togglePaginationMenu"
-            :aria-expanded="paginationOpen"
-            aria-haspopup="listbox"
-          >
-            <span class="trigger-text">{{ paginationOptions.find(option => option.value === itemsPerPage)?.label || 'Show All' }}</span>
-            <span class="sort-arrow">▾</span>
-          </button>
-          <div v-if="paginationOpen" class="sort-options" role="listbox">
+        <div class="header-row bottom-row">
+          <div class="sort-select" ref="sortMenu">
             <button
-              v-for="option in paginationOptions"
-              :key="option.value"
               type="button"
-              class="sort-option"
-              :class="{ selected: option.value === itemsPerPage }"
-              @click="selectPaginationOption(option.value)"
+              class="sort-trigger"
+              @click="toggleSortMenu"
+              :aria-expanded="sortOpen"
+              aria-haspopup="listbox"
             >
-              {{ option.label }}
+              <span class="trigger-text">{{ sortOptions.find(option => option.value === sortBy)?.label || 'Sort by price...' }}</span>
+              <span class="sort-arrow">▾</span>
             </button>
+            <div v-if="sortOpen" class="sort-options" role="listbox">
+              <button
+                v-for="option in sortOptions"
+                :key="option.value"
+                type="button"
+                class="sort-option"
+                :class="{ selected: option.value === sortBy }"
+                @click="selectSortOption(option.value)"
+              >
+                {{ option.label }}
+              </button>
+            </div>
           </div>
+
+          <div class="pagination-select" ref="paginationMenu">
+            <button
+              type="button"
+              class="sort-trigger"
+              @click="togglePaginationMenu"
+              :aria-expanded="paginationOpen"
+              aria-haspopup="listbox"
+            >
+              <span class="trigger-text">{{ paginationOptions.find(option => option.value === itemsPerPage)?.label || 'Show All' }}</span>
+              <span class="sort-arrow">▾</span>
+            </button>
+            <div v-if="paginationOpen" class="sort-options" role="listbox">
+              <button
+                v-for="option in paginationOptions"
+                :key="option.value"
+                type="button"
+                class="sort-option"
+                :class="{ selected: option.value === itemsPerPage }"
+                @click="selectPaginationOption(option.value)"
+              >
+                {{ option.label }}
+              </button>
+            </div>
+          </div>
+
+          <div class="actions-wrapper">
+              <button 
+                type="button"
+                class="header-btn filter-toggle"
+                :class="{ active: showFilters || selectedBrands.length > 0 || minPrice > 0 || maxPrice < 2000 || minRating > 0 }"
+                @click="showFilters = !showFilters"
+                title="Toggle Advanced Filters"
+              >
+                <span class="btn-icon">🔍</span>
+                <span class="badge" v-if="selectedBrands.length > 0 || minPrice > 0 || maxPrice < 2000 || minRating > 0">!</span>
+              </button>
+
+              <button 
+                type="button" 
+                class="header-btn compare-btn" 
+                :class="{ 'has-items': compareList.length > 0 }"
+                @click="showCompareModal = true"
+                title="Compare Products"
+              >
+                <span class="btn-icon">⚖️</span>
+                <span class="badge" v-if="compareList.length > 0">{{ compareList.length }}</span>
+              </button>
+            </div>
         </div>
 
-        <div class="actions-wrapper">
-            <button 
-              type="button"
-              class="header-btn filter-toggle"
-              :class="{ active: showFilters || selectedBrands.length > 0 || minPrice > 0 || maxPrice < 2000 || minRating > 0 }"
-              @click="showFilters = !showFilters"
-              title="Toggle Advanced Filters"
-            >
-              <span class="btn-icon">🔍</span>
-              <span class="badge" v-if="selectedBrands.length > 0 || minPrice > 0 || maxPrice < 2000 || minRating > 0">!</span>
-            </button>
-
-            <button 
-              type="button" 
-              class="header-btn compare-btn" 
-              :class="{ 'has-items': compareList.length > 0 }"
-              @click="showCompareModal = true"
-              title="Compare Products"
-            >
-              <span class="btn-icon">⚖️</span>
-              <span class="badge" v-if="compareList.length > 0">{{ compareList.length }}</span>
-            </button>
-
-            <RouterLink to="/wishlist" class="header-btn wishlist-link" title="View Wishlist">
-              <span class="btn-icon">♥</span>
-              <span class="badge" v-if="productStore.favorites.length > 0">{{ productStore.favorites.length }}</span>
-            </RouterLink>
-
-            <RouterLink to="/cart" class="header-btn cart-link" title="View Cart">
-              <span class="btn-icon">🛒</span>
-              <span class="badge" v-if="productStore.cart.length > 0">{{ productStore.cart.length }}</span>
-            </RouterLink>
-          </div>
       </div>
     </div>
 
@@ -795,7 +826,7 @@ watch(() => filteredProducts.value, () => {
           <table class="compare-table">
             <thead>
               <tr>
-                <th>Feature</th>
+                <th>Product</th>
                 <th v-for="p in compareList" :key="p.id">
                   <div class="compare-item-header">
                     <img :src="p.thumbnail" :alt="p.title" class="compare-thumb" loading="lazy" decoding="async">
@@ -874,7 +905,7 @@ watch(() => filteredProducts.value, () => {
                     :to="'/product/' + p.id"
                     class="suggestion-card"
                   >
-                  <img :src="p.thumbnail" :alt="p.title" loading="lazy" decoding="async">
+                  <img :src="p.thumbnail || (p.images && p.images[0])" :alt="p.title" loading="lazy" decoding="async">
                     <div class="suggestion-info">
                       <h4>{{ p.title }}</h4>
                       <p>£{{ p.price.toLocaleString('en-US', { minimumFractionDigits: 2 }) }}</p>
@@ -894,72 +925,79 @@ watch(() => filteredProducts.value, () => {
               @touchend="endTouch"
               @touchmove="endTouch"
             >
-              <RouterLink :to="'/product/' + p.id">
-                <div class="product-image-container">
-                <img :src="p.thumbnail" :alt="p.title" class="product-image" loading="lazy" decoding="async">
+              <div class="product-card-shell">
+                <RouterLink :to="'/product/' + p.id" class="product-link product-link-image">
+                  <div class="product-image-container">
+                    <img :src="p.thumbnail || (p.images && p.images[0])" :alt="p.title" class="product-image" loading="lazy" decoding="async">
                   
-                  <!-- Badge Group (Stock, Discount, Best Seller) -->
-                  <div class="product-badges">
-                    <span v-if="p.stock < 10 && p.stock > 0" class="badge-tag stock-tag">
-                      Only {{ p.stock }} Left!
-                    </span>
-                    <span v-else-if="p.stock === 0" class="badge-tag out-of-stock-tag">
-                      Out of Stock
-                    </span>
-                    <span v-if="Math.round(p.discountPercentage) > 0" class="badge-tag discount-tag">
-                      -{{ Math.round(p.discountPercentage) }}%
-                    </span>
-                    <span v-if="p.rating >= 4.8" class="badge-tag best-seller-tag">
-                      Best Seller
-                    </span>
+                    <div class="product-badges">
+                      <span v-if="p.stock < 10 && p.stock > 0" class="badge-tag stock-tag">
+                        Only {{ p.stock }} Left!
+                      </span>
+                      <span v-else-if="p.stock === 0" class="badge-tag out-of-stock-tag">
+                        Out of Stock
+                      </span>
+                      <span v-if="Math.round(p.discountPercentage) > 0" class="badge-tag discount-tag">
+                        -{{ Math.round(p.discountPercentage) }}%
+                      </span>
+                      <span v-if="p.rating >= 4.8" class="badge-tag best-seller-tag">
+                        Best Seller
+                      </span>
+                    </div>
                   </div>
+                </RouterLink>
+
+                <div class="card-actions">
+                  <button 
+                    type="button"
+                    class="favorite-btn"
+                    :class="{ favorited: isFavorited(p.id) }"
+                    @click="toggleFavorite(p.id)"
+                    :title="isFavorited(p.id) ? 'Remove from favorites' : 'Add to favorites'"
+                    :aria-label="isFavorited(p.id) ? `Remove ${p.title} from favourites` : `Add ${p.title} to favourites`"
+                  >
+                    ♥
+                  </button>
+                  <button 
+                    type="button"
+                    class="compare-toggle-btn"
+                    :class="{ active: isComparing(p.id) }"
+                    @click="toggleCompare(p)"
+                    :title="isComparing(p.id) ? 'Remove from comparison' : 'Add to comparison'"
+                    :aria-label="isComparing(p.id) ? `Remove ${p.title} from comparison` : `Add ${p.title} to comparison`"
+                  >
+                    ⚖️
+                  </button>
+                  <button 
+                    type="button"
+                    class="share-card-btn"
+                    @click="shareProduct(p)"
+                    title="Share this product"
+                    :aria-label="`Share ${p.title}`"
+                  >
+                    📤
+                  </button>
                 </div>
-                <div class="product-info">
-                  <h2 class="product-title">{{ p.title }}</h2>
-                  <div class="price-container">
-                    <p class="product-price">£{{ p.price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }}</p>
-                    <p v-if="Math.round(p.discountPercentage) > 0" class="original-price">
-                      £{{ (p.price / (1 - p.discountPercentage / 100)).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }}
-                    </p>
+
+                <RouterLink :to="'/product/' + p.id" class="product-link product-link-info">
+                  <div class="product-info">
+                    <h2 class="product-title">{{ formatTitle(p.title) }}</h2>
+                    <div class="price-container">
+                      <p class="product-price">£{{ p.price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }}</p>
+                      <p v-if="Math.round(p.discountPercentage) > 0" class="original-price">
+                        £{{ (p.price / (1 - p.discountPercentage / 100)).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }}
+                      </p>
+                    </div>
+                    <p class="product-description">{{ formatDescription(p.description) }}</p>
+                    <div class="product-meta">
+                      <span class="meta-pill product-rating">⭐ {{ productStore.formatRating(p.rating) }}</span>
+                      <span class="meta-pill product-stock" :class="{ 'low-stock': p.stock < 10 }">
+                        {{ formatStock(p.stock) }}
+                      </span>
+                    </div>
                   </div>
-                  <p class="product-description">{{ p.description.length > 80 ? p.description.slice(0, 80) + '...' : p.description }}</p>
-                  <div class="product-meta">
-                    <span class="meta-pill product-rating">⭐ {{ productStore.formatRating(p.rating) }}</span>
-                    <span class="meta-pill product-stock" :class="{ 'low-stock': p.stock < 10 }">
-                      {{ formatStock(p.stock) }}
-                    </span>
-                  </div>
-                </div>
-              </RouterLink>
-              <button 
-                type="button"
-                class="favorite-btn"
-                :class="{ favorited: isFavorited(p.id) }"
-                @click="toggleFavorite(p.id)"
-                :title="isFavorited(p.id) ? 'Remove from favorites' : 'Add to favorites'"
-              :aria-label="isFavorited(p.id) ? `Remove ${p.title} from favourites` : `Add ${p.title} to favourites`"
-              >
-                ♥
-              </button>
-              <button 
-                type="button"
-                class="compare-toggle-btn"
-                :class="{ active: isComparing(p.id) }"
-                @click="toggleCompare(p)"
-                :title="isComparing(p.id) ? 'Remove from comparison' : 'Add to comparison'"
-              :aria-label="isComparing(p.id) ? `Remove ${p.title} from comparison` : `Add ${p.title} to comparison`"
-              >
-                ⚖️
-              </button>
-              <button 
-                type="button"
-                class="share-card-btn"
-                @click="shareProduct(p)"
-                title="Share this product"
-              :aria-label="`Share ${p.title}`"
-              >
-                📤
-              </button>
+                </RouterLink>
+              </div>
             </div>
           </div>
         </transition>
@@ -987,8 +1025,15 @@ watch(() => filteredProducts.value, () => {
             </div>
           </div>
           <div class="compare-bar-actions">
-            <button class="compare-bar-clear" @click="clearCompare">Clear All</button>
-            <button class="compare-bar-view" @click="showCompareModal = true">Compare Now</button>
+            <button class="compare-bar-clear" @click="clearCompare">
+              <span class="compare-bar-clear-icon">🗑️</span>
+              <span class="compare-bar-clear-text">Clear</span>
+              <span class="compare-bar-clear-all">All</span>
+            </button>
+            <button class="compare-bar-view" @click="showCompareModal = true">
+              <span class="compare-bar-view-text">Compare</span>
+              <span class="compare-bar-view-now">Now</span>
+            </button>
           </div>
         </div>
       </div>
@@ -1009,7 +1054,7 @@ watch(() => filteredProducts.value, () => {
             class="viewed-card"
           >
             <div class="viewed-thumb-wrapper">
-              <img :src="p.thumbnail" :alt="p.title" class="viewed-thumb" loading="lazy" decoding="async">
+              <img :src="p.thumbnail || (p.images && p.images[0])" :alt="p.title" class="viewed-thumb" loading="lazy" decoding="async">
             </div>
             <div class="viewed-info">
               <h4>{{ p.title }}</h4>
@@ -1231,17 +1276,30 @@ watch(() => filteredProducts.value, () => {
   margin-right: 0.5rem;
 }
 
-/* Header: Actions & Menus */
-.header-actions {
-  display: flex;
-  align-items: center;
-  gap: 0.9375rem;
+header {
+  padding: 0.75rem 1rem;
+}
+
+.header-right .search-form { order: 1; }
+.header-right .sort-select { order: 2; }
+.header-right .pagination-select { order: 3; }
+.header-right .actions-wrapper { order: 4; }
+.header-right .wishlist-link { order: 5; }
+.header-right .cart-link { order: 6; }
+
+.header-row {
+  display: contents;
 }
 
 .sort-select {
   position: relative;
   width: 11.25rem;
 }
+.pagination-select {
+  position: relative;
+  width: 11.25rem;
+}
+
 
 .sort-trigger {
   width: 100%;
@@ -1646,9 +1704,7 @@ watch(() => filteredProducts.value, () => {
 }
 
 .compare-toggle-btn {
-  position: absolute;
-  top: calc(0.625rem + 3.25rem);
-  right: 0.625rem;
+  position: static;
   background: rgba(0, 0, 0, 0.5);
   border: none;
   color: white;
@@ -1671,9 +1727,7 @@ watch(() => filteredProducts.value, () => {
 }
 
 .share-card-btn {
-  position: absolute;
-  top: calc(0.625rem + 6.5rem);
-  right: 0.625rem;
+  position: static;
   background: rgba(0, 0, 0, 0.5);
   border: none;
   color: white;
@@ -1714,7 +1768,7 @@ watch(() => filteredProducts.value, () => {
   background-color: #1a1a1a;
   width: 100%;
   max-width: 62.5rem;
-  max-height: 90vh;
+  max-height: calc(100svh - 2.5rem);
   border-radius: 1rem;
   border: 0.125rem solid #424242;
   overflow: hidden;
@@ -1728,6 +1782,10 @@ watch(() => filteredProducts.value, () => {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background-color: #1a1a1a;
 }
 
 .compare-header h3 {
@@ -1741,24 +1799,39 @@ watch(() => filteredProducts.value, () => {
   border: none;
   color: #999;
   font-size: 1.5rem;
+  line-height: 1;
+  padding: 0.25rem 0.5rem;
   cursor: pointer;
 }
 
 .compare-table-wrapper {
-  overflow-x: auto;
+  flex: 1 1 auto;
+  overflow: auto;
   padding: 1.5rem;
 }
 
 .compare-table {
-  width: 100%;
+  width: max-content;
+  min-width: 100%;
   border-collapse: collapse;
 }
 
 .compare-table th, .compare-table td {
   padding: 1rem;
   text-align: left;
+  vertical-align: top;
   border-bottom: 0.0625rem solid #333;
   color: #eee;
+}
+
+.compare-table th:first-child,
+.compare-table td:first-child {
+  min-width: 8.5rem;
+}
+
+.compare-table th:not(:first-child),
+.compare-table td:not(:first-child) {
+  min-width: 12.5rem;
 }
 
 .compare-table th {
@@ -1770,9 +1843,9 @@ watch(() => filteredProducts.value, () => {
 .compare-item-header {
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: flex-start;
   gap: 0.75rem;
-  text-align: center;
+  text-align: left;
 }
 
 .compare-thumb {
@@ -1788,6 +1861,7 @@ watch(() => filteredProducts.value, () => {
   font-size: 0.9375rem;
   font-weight: 600;
   color: white;
+  overflow-wrap: anywhere;
 }
 
 .remove-compare {
@@ -1811,6 +1885,27 @@ watch(() => filteredProducts.value, () => {
 }
 
 @media (max-width: 48rem) {
+  .compare-modal-overlay {
+    padding: 0.75rem;
+  }
+
+  .compare-header {
+    padding: 1rem;
+  }
+
+  .compare-table-wrapper {
+    padding: 1rem;
+  }
+
+  .compare-table th, .compare-table td {
+    padding: 0.75rem;
+  }
+
+  .compare-thumb {
+    width: 4rem;
+    height: 4rem;
+  }
+
   .header-content {
     flex-direction: column;
     align-items: stretch;
@@ -1818,55 +1913,86 @@ watch(() => filteredProducts.value, () => {
   }
 
   .header-content h1 {
-    display: none;
+    display: block;
+    width: 100%;
+    line-height: 1.2;
   }
 
   .header-right {
-    display: grid;
-    grid-template-columns: 1fr 1fr 1fr;
-    grid-template-areas: 
-      "search search search"
-      "sort paginate actions";
-    gap: 0.75rem 0.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
     width: 100%;
   }
 
-  .search-form {
-    grid-area: search;
+  .top-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    width: 100%;
+  }
+
+  .top-row .search-form {
+    order: 1;
+    flex: 1;
     max-width: 100%;
     width: 100%;
-  }
-  
-  #textbox1 {
-    padding-right: 6.5rem;
-  }
-  
-  .sort-select { 
-    grid-area: sort; 
-    width: 100%;
-  }
-  
-  .pagination-select { 
-    grid-area: paginate; 
-    width: 100%;
-  }
-  
-  .actions-wrapper {
-    grid-area: actions;
-    display: flex;
-    gap: 0.375rem;
-    width: 100%;
-  }
-
-  .sort-select, .pagination-select {
-    max-width: none;
-  }
-
-  .header-btn {
-    flex: 1;
     min-width: 0;
-    width: auto;
-    height: 2.75rem;
+  }
+  
+  .top-row #textbox1 {
+    height: 2.5rem;
+    font-size: 0.9375rem;
+    padding: 0 5.5rem 0 0.8125rem;
+  }
+  
+  .top-row .wishlist-link,
+  .top-row .cart-link {
+    order: 2;
+    flex: 0 0 auto;
+    width: 2.5rem;
+    height: 2.5rem;
+    font-size: 1.25rem;
+  }
+
+  .top-row .cart-link { order: 3; }
+
+  .bottom-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr);
+    gap: 0.5rem;
+    width: 100%;
+  }
+
+  .bottom-row .sort-select,
+  .bottom-row .pagination-select {
+    order: 1;
+    width: 100%;
+    max-width: none;
+    min-width: 0;
+  }
+
+  .bottom-row .pagination-select { order: 2; }
+
+  .bottom-row .actions-wrapper {
+    order: 3;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.5rem;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .bottom-row .sort-trigger {
+    height: 2.5rem;
+    font-size: 0.8125rem;
+    padding: 0 0.625rem;
+  }
+
+  .bottom-row .actions-wrapper .header-btn {
+    width: 100%;
+    height: 2.5rem;
+    font-size: 1.25rem;
   }
 }
 
@@ -1900,38 +2026,46 @@ watch(() => filteredProducts.value, () => {
     padding: 0.875rem;
   }
 
+  .product-title {
+    font-size: 0.9375rem;
+  }
+
   .price-container {
     flex-direction: row;
     align-items: baseline;
     justify-content: flex-start;
     flex-wrap: nowrap;
-    gap: 0.5rem;
+    gap: 0.375rem;
     margin-bottom: 0.375rem;
   }
 
   .product-price {
-    font-size: 1.05rem;
+    font-size: 1rem;
     white-space: nowrap;
   }
 
   .original-price {
-    font-size: 0.75rem;
+    font-size: 0.6875rem;
     white-space: nowrap;
   }
 
-
   .product-description {
-    display: block;
     line-height: 1.5;
     overflow: hidden;
-    max-height: calc(1.5em * 3);
-    height: auto;
+    max-height: calc(1.5em * 2);
+    min-height: calc(1.5em * 2);
     margin-bottom: 0.5rem;
   }
 
   .product-meta {
     gap: 0.5rem;
     margin-bottom: 0.25rem;
+    flex-wrap: nowrap;
+  }
+
+  .meta-pill {
+    font-size: 0.6875rem;
+    padding: 0.3125rem 0.5rem;
   }
 }
 
@@ -1963,6 +2097,128 @@ watch(() => filteredProducts.value, () => {
   background-color: rgba(77, 184, 255, 0.2);
   border-color: #4db8ff;
   color: #4db8ff;
+}
+
+/* Product Cards */
+.product-card-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  border-radius: 0.75rem;
+  overflow: hidden;
+  position: relative;
+}
+
+.product-card a {
+  display: block;
+  height: auto;
+  overflow: visible;
+  border-radius: 0;
+}
+
+.product-link {
+  display: block;
+  color: inherit;
+}
+
+.product-link-image {
+  flex: 0 0 auto;
+}
+
+.product-link-info {
+  flex: 1 1 auto;
+  display: flex;
+}
+
+.card-actions {
+  position: absolute;
+  top: 0.625rem;
+  right: 0.625rem;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+}
+
+.card-actions .favorite-btn,
+.card-actions .compare-toggle-btn,
+.card-actions .share-card-btn {
+  position: static;
+  transition: transform 0.15s ease, background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.card-actions .favorite-btn:active,
+.card-actions .compare-toggle-btn:active,
+.card-actions .share-card-btn:active {
+  transform: scale(0.97);
+}
+
+@media (hover: hover) {
+  .card-actions .favorite-btn:hover,
+  .card-actions .compare-toggle-btn:hover,
+  .card-actions .share-card-btn:hover {
+    transform: translateY(-0.125rem);
+    box-shadow: 0 0.375rem 1.125rem rgba(0, 0, 0, 0.35);
+  }
+
+  .card-actions .favorite-btn:hover {
+    background-color: rgba(255, 107, 107, 0.18);
+    color: #ff6b6b;
+  }
+
+  .card-actions .compare-toggle-btn:hover {
+    background-color: rgba(77, 184, 255, 0.18);
+  }
+
+  .card-actions .share-card-btn:hover {
+    background-color: rgba(77, 184, 255, 0.85);
+  }
+}
+
+@media (max-width: 48rem) {
+  .card-actions {
+    position: static;
+    width: 100%;
+    height: auto;
+    display: flex;
+    flex-direction: row;
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    background-color: #2a2a2a;
+    border-top: 0.0625rem solid #333;
+    border-bottom: 0.0625rem solid #333;
+  }
+
+  .card-actions .favorite-btn,
+  .card-actions .compare-toggle-btn,
+  .card-actions .share-card-btn {
+    position: static;
+    flex: 1 1 0;
+    width: auto;
+    height: 2.5rem;
+    border-radius: 0.5rem;
+    background-color: #333;
+    border: 0.0625rem solid #565656;
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.125rem;
+    padding: 0;
+    backdrop-filter: none;
+  }
+
+  .card-actions .favorite-btn.favorited {
+    border-color: rgba(255, 107, 107, 0.8);
+    color: #ff6b6b;
+    background-color: rgba(255, 107, 107, 0.12);
+  }
+
+  .card-actions .compare-toggle-btn.active {
+    border-color: rgba(77, 184, 255, 0.9);
+    color: #4db8ff;
+    background-color: rgba(77, 184, 255, 0.12);
+  }
 }
 
 .product-image-container {
@@ -2069,6 +2325,7 @@ watch(() => filteredProducts.value, () => {
   font-weight: 800;
   color: #eee;
   line-height: 1;
+  white-space: nowrap;
 }
 
 .product-rating {
@@ -2134,7 +2391,8 @@ watch(() => filteredProducts.value, () => {
   gap: 0.5rem;
   flex: 1;
   overflow-x: auto;
-  padding: 0.25rem 0;
+  overflow-y: visible;
+  padding: 0.5rem 0.25rem 0.25rem;
 }
 
 .compare-bar-thumb-wrapper {
@@ -2152,15 +2410,15 @@ watch(() => filteredProducts.value, () => {
 
 .compare-bar-remove {
   position: absolute;
-  top: -0.375rem;
-  right: -0.375rem;
-  width: 1rem;
-  height: 1rem;
+  top: -0.25rem;
+  right: -0.25rem;
+  width: 1.125rem;
+  height: 1.125rem;
   background-color: #ff6b6b;
   color: white;
   border: none;
   border-radius: 50%;
-  font-size: 0.625rem;
+  font-size: 0.75rem;
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -2182,6 +2440,14 @@ watch(() => filteredProducts.value, () => {
   font-size: 0.75rem;
   font-weight: 600;
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  white-space: nowrap;
+}
+
+.compare-bar-clear-icon {
+  line-height: 1;
 }
 
 .compare-bar-view {
@@ -2193,6 +2459,9 @@ watch(() => filteredProducts.value, () => {
   font-size: 0.75rem;
   font-weight: 700;
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
   white-space: nowrap;
 }
 
@@ -2219,7 +2488,41 @@ watch(() => filteredProducts.value, () => {
   }
   
   .compare-bar-content {
+    flex-wrap: nowrap;
     gap: 0.75rem;
+  }
+
+  .compare-bar-info {
+    flex: 0 0 auto;
+    gap: 0.5rem;
+  }
+
+  .compare-bar-thumbs {
+    flex: 1 1 auto;
+    min-width: 0;
+    gap: 0.375rem;
+    padding: 0.5rem 0.125rem 0.25rem;
+  }
+
+  .compare-bar-thumb {
+    width: 2.25rem;
+    height: 2.25rem;
+  }
+
+  .compare-bar-actions {
+    flex: 0 0 auto;
+    gap: 0.5rem;
+  }
+
+  .compare-bar-clear,
+  .compare-bar-view {
+    padding: 0.5rem 0.625rem;
+    font-size: 0.75rem;
+  }
+
+  .compare-bar-clear-all,
+  .compare-bar-view-now {
+    display: none;
   }
 }
 

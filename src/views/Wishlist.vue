@@ -1,6 +1,6 @@
 <script setup>
 import { ref, onMounted, computed, onBeforeUnmount } from 'vue'
-import { useProducts } from '../main.js'
+import { useProducts } from '../stores/products.js'
 import ProductContextMenu from '../components/ProductContextMenu.vue'
 
 const productStore = useProducts()
@@ -287,6 +287,10 @@ const endTouch = () => {
   flex-direction: column;
 }
 
+header {
+  padding: 0.75rem 1rem;
+}
+
 .header-left {
   display: flex;
   align-items: center;
@@ -300,19 +304,47 @@ const endTouch = () => {
   .back-text-short { display: inline; }
   
   .header-content {
-    flex-direction: column;
-    align-items: stretch;
+    flex-direction: row;
+    align-items: center;
+    flex-wrap: nowrap;
+    gap: 0.75rem;
   }
 
   .header-right {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
     gap: 0.75rem;
-    width: 100%;
+    width: auto;
   }
 
-  .pagination-select { width: 100%; }
-  .actions-wrapper { width: 100%; justify-content: flex-end; }
+  .header-left { flex: 1; min-width: 0; }
+
+  .pagination-select { flex: 1; min-width: 0; }
+  .actions-wrapper { width: auto; justify-content: flex-end; }
+
+  .actions-wrapper .header-btn {
+    width: 2.5rem;
+    height: 2.5rem;
+    font-size: 1.25rem;
+  }
+
+  .breadcrumbs {
+    flex: 1;
+    min-width: 0;
+    flex-wrap: nowrap;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    gap: 0.375rem;
+    font-size: 0.8125rem;
+  }
+
+  .breadcrumbs a,
+  .breadcrumbs .current,
+  .breadcrumbs .separator {
+    white-space: nowrap;
+  }
 }
 
 .breadcrumbs {
@@ -333,9 +365,26 @@ const endTouch = () => {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 1.5rem;
+  gap: 1.25rem;
   flex: 1;
   justify-content: center;
+}
+
+@media (max-width: 48rem) {
+  .empty-wishlist {
+    justify-content: flex-start;
+    padding-top: 1.5rem;
+    gap: 1rem;
+  }
+
+  .empty-illustration {
+    width: 7rem;
+    height: 7rem;
+  }
+
+  .empty-icon {
+    font-size: 3.5rem;
+  }
 }
 
 .browse-button {
@@ -441,9 +490,11 @@ const endTouch = () => {
   font-size: 1rem;
   margin: 0;
   color: #eee;
-  white-space: nowrap;
+  line-height: 1.4;
+  display: block;
   overflow: hidden;
-  text-overflow: ellipsis;
+  max-height: calc(1.4em * 2);
+  min-height: calc(1.4em * 2);
 }
 
 .price-container {
