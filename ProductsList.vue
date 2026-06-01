@@ -330,6 +330,10 @@ const titleMaxLength = computed(() => {
   return 70
 })
 
+const searchPlaceholder = computed(() =>
+  viewportWidth.value <= 480 ? 'Search by product...' : 'Search by product name...'
+)
+
 const descriptionMaxLength = computed(() => {
   if (viewportWidth.value <= 480) return 50
   if (viewportWidth.value <= 768) return 75
@@ -724,7 +728,7 @@ watch(
               type="text" 
               id="textbox1"
               :maxlength="MAX_SEARCH_LENGTH"
-              placeholder="Search by product name..."> 
+              :placeholder="searchPlaceholder"> 
               <button
                 v-if="inputText.length > 0"
                 type="button"
@@ -2264,6 +2268,7 @@ header {
 
   .products-grid .product-info .product-meta {
     display: flex;
+    flex-direction: column;
     align-items: flex-start;
     gap: 0.25rem;
     margin-bottom: 0.25rem;
@@ -2275,42 +2280,37 @@ header {
     padding: 0.1875rem 0.375rem;
     display: inline-flex;
     align-items: center;
-    justify-content: flex-start;
     gap: 0.25rem;
-    max-width: 100%;
     line-height: 1.2;
-    min-width: 0;
     white-space: normal;
     overflow: visible;
     box-sizing: border-box;
+    max-width: 100%;
   }
 
   .products-grid .product-info .meta-pill.product-rating {
-    flex: 0 0 auto;
     white-space: nowrap;
+    align-self: flex-start;
   }
 
   .products-grid .product-info .meta-pill.product-stock {
-    margin-left: auto;
-    flex: 0 0 auto;
-    width: clamp(4.75rem, 28vw, 6.75rem);
-    display: flex;
-    flex-direction: column;
-    align-items: flex-end;
+    align-self: flex-end;
+    display: inline-flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
     text-align: right;
-    overflow: visible;
+    white-space: normal;
+    width: auto;
     min-width: 0;
     max-width: 100%;
-    white-space: normal;
+    overflow: visible;
+    margin-left: 0;
   }
 
   .products-grid .product-info .meta-pill.product-stock .stock-count,
   .products-grid .product-info .meta-pill.product-stock .stock-label {
-    display: block;
+    display: inline;
     white-space: normal;
-    overflow: visible;
-    overflow-wrap: anywhere;
-    word-break: break-word;
   }
 }
 
