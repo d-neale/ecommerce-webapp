@@ -2197,6 +2197,10 @@ header {
     gap: 0.875rem;
   }
 
+  .product-card {
+    height: auto;
+  }
+
   .product-card-shell {
     height: auto;
   }
@@ -2204,7 +2208,7 @@ header {
   .product-info {
     padding: 0.875rem;
     height: auto;
-    min-height: 15.25rem;
+    min-height: 16.5rem;
   }
 
   .product-title {
@@ -2259,10 +2263,9 @@ header {
   }
 
   .products-grid .product-info .product-meta {
-    display: grid;
-    grid-template-columns: auto minmax(0, 1fr);
-    column-gap: 0.25rem;
-    align-items: start;
+    display: flex;
+    align-items: flex-start;
+    gap: 0.25rem;
     margin-bottom: 0.25rem;
     width: 100%;
   }
@@ -2272,22 +2275,28 @@ header {
     padding: 0.1875rem 0.375rem;
     display: inline-flex;
     align-items: center;
-    justify-content: center;
+    justify-content: flex-start;
     gap: 0.25rem;
     max-width: 100%;
     line-height: 1.2;
-    white-space: nowrap;
+    min-width: 0;
+    white-space: normal;
     overflow: visible;
     box-sizing: border-box;
   }
 
   .products-grid .product-info .meta-pill.product-rating {
-    justify-self: start;
+    flex: 0 0 auto;
     white-space: nowrap;
   }
 
   .products-grid .product-info .meta-pill.product-stock {
-    justify-self: end;
+    margin-left: auto;
+    flex: 0 0 auto;
+    width: clamp(4.75rem, 28vw, 6.75rem);
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
     text-align: right;
     overflow: visible;
     min-width: 0;
@@ -2302,13 +2311,6 @@ header {
     overflow: visible;
     overflow-wrap: anywhere;
     word-break: break-word;
-  }
-
-  .products-grid .product-info .meta-pill.product-stock {
-    display: grid;
-    grid-auto-flow: row;
-    justify-items: end;
-    align-content: start;
   }
 }
 
