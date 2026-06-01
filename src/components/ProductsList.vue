@@ -307,10 +307,16 @@ const handleKeydown = (event) => {
   contextMenuProduct.value = null
 }
 
-const formatStock = (value) => {
+const formatStockCount = (value) => {
   const n = Number(value)
-  if (!Number.isFinite(n)) return '0 in stock'
-  return `${n.toLocaleString('en-US')} in stock`
+  if (!Number.isFinite(n)) return '0'
+  return n.toLocaleString('en-US')
+}
+
+const getStockLines = (value) => {
+  const n = Number(value)
+  if (!Number.isFinite(n) || n <= 0) return ['out', 'of stock']
+  return [formatStockCount(n), 'in stock']
 }
 
 const clipText = (value, maxLength) => {
@@ -1142,7 +1148,13 @@ watch(
                     <div class="product-meta">
                       <span class="meta-pill product-rating">⭐ {{ productStore.formatRating(p.rating) }}</span>
                       <span class="meta-pill product-stock" :class="{ 'low-stock': p.stock < 10 }">
-                        {{ formatStock(p.stock) }}
+                        <span class="stock-text">
+                          <span
+                            v-for="(line, lineIndex) in getStockLines(p.stock)"
+                            :key="lineIndex"
+                            class="stock-line"
+                          >{{ line }}</span>
+                        </span>
                       </span>
                     </div>
                   </div>
@@ -2196,9 +2208,18 @@ header {
     gap: 0.875rem;
   }
 
+  .product-card {
+    height: auto;
+  }
+
+  .product-card-shell {
+    height: auto;
+  }
+
   .product-info {
     padding: 0.875rem;
-    height: 11.5rem;
+    height: auto;
+    min-height: 17.5rem;
   }
 
   .product-title {
@@ -2252,28 +2273,45 @@ header {
     text-overflow: ellipsis;
   }
 
-  .product-meta {
+  .products-grid .product-info .product-meta {
+    display: flex;
+    align-items: flex-start;
     gap: 0.25rem;
     margin-bottom: 0.25rem;
-    flex-wrap: nowrap;
-    justify-content: space-between;
+    width: 100%;
   }
 
-  .meta-pill {
-    font-size: 0.5625rem;
-    padding: 0.1875rem 0.375rem;
-    flex: 0 0 auto;
-  }
-
-  .product-rating {
-    flex: 0 0 auto;
-  }
-
-  .product-stock {
+  .products-grid .product-info .meta-pill.product-rating {
     flex: 1 1 auto;
     min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
+  }
+
+  .products-grid .product-info .meta-pill.product-stock {
+    margin-left: auto;
+    flex: 0 0 auto;
+    width: auto;
+    min-width: 3.75rem;
+    max-width: 42%;
+    text-align: right;
+    white-space: normal;
+    overflow: visible;
+    align-items: flex-end;
+    align-self: flex-start;
+    padding: 0.3125rem 0.4375rem;
+    line-height: 1.15;
+  }
+
+  .products-grid .product-info .meta-pill.product-stock .stock-text {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 0.0625rem;
+    line-height: 1.15;
+  }
+
+  .products-grid .product-info .meta-pill.product-stock .stock-line {
+    display: block;
+    white-space: nowrap;
   }
 }
 
@@ -2514,10 +2552,11 @@ header {
 }
 
 .product-meta {
-  display: flex;
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 0.5rem;
   align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
+  width: 100%;
 }
 
 .meta-pill {
@@ -2532,8 +2571,10 @@ header {
   font-size: 0.75rem;
   font-weight: 800;
   color: #eee;
-  line-height: 1;
+  line-height: 1.2;
   white-space: nowrap;
+  box-sizing: border-box;
+  max-width: 100%;
 }
 
 .product-rating {
@@ -2542,7 +2583,18 @@ header {
 
 .product-stock {
   color: #b3b3b3;
+  justify-self: end;
+  justify-content: flex-end;
 }
+
+.stock-text {
+  display: inline-flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.25rem;
+  white-space: nowrap;
+}
+
 
 .product-stock.low-stock {
   border-color: rgba(255, 152, 0, 0.6);
