@@ -35,6 +35,12 @@ const cartTotal = computed(() => {
   return productStore.cart.reduce((sum, item) => sum + (item.price * item.quantity), 0)
 })
 
+const focusMainContent = () => {
+  requestAnimationFrame(() => {
+    document.getElementById('main-content')?.focus?.()
+  })
+}
+
 onMounted(() => {
   checkScroll()
   window.addEventListener('scroll', checkScroll, { passive: true })
@@ -48,6 +54,8 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
+  <!-- Accessibility: allows keyboard users to jump past repeated header controls -->
+  <a class="skip-link" href="#main-content" @click="focusMainContent">Skip to main content</a>
   <RouterView />
   
   <!-- Mini Cart Sidebar -->
@@ -93,7 +101,7 @@ onBeforeUnmount(() => {
   </transition>
 
   <!-- Global Notifications -->
-  <div class="notifications-container">
+  <div class="notifications-container" role="region" aria-label="Notifications" aria-live="polite" aria-relevant="additions">
     <transition-group name="toast">
       <div 
         v-for="note in productStore.notifications" 
@@ -418,9 +426,30 @@ onBeforeUnmount(() => {
 }
 
 .fade-enter-active,
+.skip-link {
+  position: fixed;
+  top: 0.75rem;
+  left: 0.75rem;
+  z-index: 3000;
+  padding: 0.625rem 0.875rem;
+  border-radius: 0.5rem;
+  background-color: #4db8ff;
+  color: #0b0b0b;
+  font-weight: 700;
+  transform: translateY(-200%);
+  transition: transform 0.15s ease;
+}
+
+.skip-link:focus-visible {
+  transform: translateY(0);
+  outline: 0.125rem solid #fff;
+  outline-offset: 0.125rem;
+}
+
 .fade-leave-active {
   transition: opacity 0.3s ease, transform 0.3s ease;
 }
+
 
 .fade-enter-from,
 .fade-leave-to {

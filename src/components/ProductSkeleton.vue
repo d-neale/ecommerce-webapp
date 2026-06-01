@@ -89,4 +89,10 @@
     transform: translateX(100%);
   }
 }
+
+@media (prefers-reduced-motion: reduce) {
+  .shimmer::after {
+    animation: none;
+  }
+}
 </style>

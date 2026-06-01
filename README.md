@@ -48,7 +48,10 @@ Browse products, search and filter, compare items, manage a wishlist, and add it
 
 * 📱 **Responsive, touch‑friendly UI** with reduced‑motion support
 
-* ⌨️ **Keyboard escape‑to‑close** for overlays and menus
+* ♿ **Accessibility polish**
+  * Skip‑to‑content support across pages
+  * Keyboard‑friendly dropdowns (search / sort / pagination / reviews)
+  * Focus management + escape‑to‑close for modals/lightboxes (trap + restore)
 
 
 
@@ -113,16 +116,24 @@ Created as part of my learning journey as a Computer Science student, focusing o
 
 
 1. Install dependencies:
+```bash
 npm install
+```
 
 2. Run the development server:
+```bash
 npm run dev
+```
 
 3. Build for production:
+```bash
 npm run build
+```
 
 4. Preview the production build locally:
+```bash
 npm run preview
+```
 
 
 

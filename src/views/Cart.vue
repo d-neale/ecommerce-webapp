@@ -42,7 +42,7 @@ const checkout = () => {
         </div>
         <div class="header-right">
           <div class="actions-wrapper">
-            <RouterLink to="/wishlist" class="header-btn wishlist-link" title="View Wishlist">
+            <RouterLink to="/wishlist" class="header-btn wishlist-link" title="View Wishlist" aria-label="View wishlist">
               <span class="btn-icon">♥</span>
               <span class="badge" v-if="productStore.favorites.length > 0">{{ productStore.favorites.length }}</span>
             </RouterLink>
@@ -51,7 +51,7 @@ const checkout = () => {
       </div>
     </header>
 
-    <main class="cart-main">
+    <main id="main-content" tabindex="-1" class="cart-main">
       <div v-if="cartItems.length === 0" class="empty-cart">
         <div class="empty-illustration">
           <div class="illustration-circle"></div>
@@ -73,14 +73,14 @@ const checkout = () => {
               <p class="item-price">£{{ item.price.toLocaleString('en-US', { minimumFractionDigits: 2 }) }}</p>
             </div>
             <div class="item-quantity">
-              <button type="button" @click="updateQuantity(item.id, -1)" class="qty-btn">-</button>
+            <button type="button" @click="updateQuantity(item.id, -1)" class="qty-btn" :aria-label="`Decrease quantity for ${item.title}`">-</button>
               <span class="qty-value">{{ item.quantity }}</span>
-              <button type="button" @click="updateQuantity(item.id, 1)" class="qty-btn" :disabled="item.quantity >= (item.stock || 99)">+</button>
+            <button type="button" @click="updateQuantity(item.id, 1)" class="qty-btn" :aria-label="`Increase quantity for ${item.title}`" :disabled="item.quantity >= (item.stock || 99)">+</button>
             </div>
             <div class="item-total">
               £{{ (item.price * item.quantity).toLocaleString('en-US', { minimumFractionDigits: 2 }) }}
             </div>
-            <button type="button" @click="removeItem(item.id)" class="remove-btn" title="Remove item">✕</button>
+            <button type="button" @click="removeItem(item.id)" class="remove-btn" :aria-label="`Remove ${item.title} from cart`" title="Remove item">✕</button>
           </div>
         </div>
 

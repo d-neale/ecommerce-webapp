@@ -12,6 +12,10 @@ const loading = ref(true)
 const quantity = ref(1)
 const activeImageIndex = ref(0)
 const showLightbox = ref(false)
+// Accessibility: treat the lightbox as a modal (focus trap + focus restore)
+const lightboxEl = ref(null)
+const lightboxCloseButton = ref(null)
+let lightboxLastFocusedEl = null
 
 // Review Sorting & Filtering
 const reviewSortBy = ref('newest')
@@ -22,6 +26,13 @@ const reviewSortMenu = ref(null)
 const reviewFilterMenu = ref(null)
 const reviewSortMenuStyle = ref({})
 const reviewFilterMenuStyle = ref({})
+// Accessibility: keyboard navigation for review filter/sort listboxes
+const reviewSortTrigger = ref(null)
+const reviewFilterTrigger = ref(null)
+const reviewSortListbox = ref(null)
+const reviewFilterListbox = ref(null)
+const activeReviewSortOptionIndex = ref(-1)
+const activeReviewFilterOptionIndex = ref(-1)
 const reviewSortOptions = [
   { value: 'newest', label: 'Newest First' },
   { value: 'highest', label: 'Highest Rated' },
@@ -168,17 +179,18 @@ const loadProduct = async () => {
 onMounted(loadProduct)
 
 const handleReviewDocumentClick = (event) => {
-  if (reviewSortMenu.value && !reviewSortMenu.value.contains(event.target)) {
-    reviewSortOpen.value = false
-  }
-  if (reviewFilterMenu.value && !reviewFilterMenu.value.contains(event.target)) {
-    reviewFilterOpen.value = false
-  }
+  const sortRoot = reviewSortMenu.value
+  const filterRoot = reviewFilterMenu.value
+  const target = event.target
+  if ((sortRoot && sortRoot.contains(target)) || (filterRoot && filterRoot.contains(target))) return
+  closeReviewMenus()
 }
 
 const closeReviewMenus = () => {
   reviewSortOpen.value = false
   reviewFilterOpen.value = false
+  activeReviewSortOptionIndex.value = -1
+  activeReviewFilterOptionIndex.value = -1
 }
 
 const pxToRem = (px) => {
@@ -214,35 +226,218 @@ const positionReviewMenu = (containerRef, styleRef) => {
 
 const toggleReviewSortMenu = (event) => {
   event.stopPropagation()
-  reviewSortOpen.value = !reviewSortOpen.value
   if (reviewSortOpen.value) {
-    reviewFilterOpen.value = false
-    nextTick(() => {
-      positionReviewMenu(reviewSortMenu, reviewSortMenuStyle)
-    })
+    closeReviewMenus()
+    return
   }
+
+  reviewFilterOpen.value = false
+  const selectedIndex = reviewSortOptions.findIndex(o => o.value === reviewSortBy.value)
+  activeReviewSortOptionIndex.value = selectedIndex >= 0 ? selectedIndex : 0
+  reviewSortOpen.value = true
+  nextTick(() => {
+    positionReviewMenu(reviewSortMenu, reviewSortMenuStyle)
+    reviewSortListbox.value?.focus?.()
+  })
 }
 
 const toggleReviewFilterMenu = (event) => {
   event.stopPropagation()
-  reviewFilterOpen.value = !reviewFilterOpen.value
   if (reviewFilterOpen.value) {
-    reviewSortOpen.value = false
-    nextTick(() => {
-      positionReviewMenu(reviewFilterMenu, reviewFilterMenuStyle)
-    })
+    closeReviewMenus()
+    return
   }
+
+  reviewSortOpen.value = false
+  const selectedIndex = reviewFilterOptions.findIndex(o => o.value === reviewFilterRating.value)
+  activeReviewFilterOptionIndex.value = selectedIndex >= 0 ? selectedIndex : 0
+  reviewFilterOpen.value = true
+  nextTick(() => {
+    positionReviewMenu(reviewFilterMenu, reviewFilterMenuStyle)
+    reviewFilterListbox.value?.focus?.()
+  })
 }
 
 const selectReviewSort = (value) => {
   reviewSortBy.value = value
-  reviewSortOpen.value = false
+  closeReviewMenus()
+  nextTick(() => reviewSortTrigger.value?.focus?.())
 }
 
 const selectReviewFilter = (value) => {
   reviewFilterRating.value = value
-  reviewFilterOpen.value = false
+  closeReviewMenus()
+  nextTick(() => reviewFilterTrigger.value?.focus?.())
 }
+
+const activeReviewSortOptionId = computed(() => {
+  if (!reviewSortOpen.value) return undefined
+  if (activeReviewSortOptionIndex.value < 0) return undefined
+  return `review-sort-option-${activeReviewSortOptionIndex.value}`
+})
+
+const activeReviewFilterOptionId = computed(() => {
+  if (!reviewFilterOpen.value) return undefined
+  if (activeReviewFilterOptionIndex.value < 0) return undefined
+  return `review-filter-option-${activeReviewFilterOptionIndex.value}`
+})
+
+const handleReviewSortListKeydown = (event) => {
+  const count = reviewSortOptions.length
+  if (count === 0) return
+
+  if (event.key === 'Tab') {
+    closeReviewMenus()
+    return
+  }
+
+  if (event.key === 'ArrowDown') {
+    event.preventDefault()
+    activeReviewSortOptionIndex.value = (activeReviewSortOptionIndex.value + 1 + count) % count
+    return
+  }
+
+  if (event.key === 'ArrowUp') {
+    event.preventDefault()
+    activeReviewSortOptionIndex.value = (activeReviewSortOptionIndex.value - 1 + count) % count
+    return
+  }
+
+  if (event.key === 'Home') {
+    event.preventDefault()
+    activeReviewSortOptionIndex.value = 0
+    return
+  }
+
+  if (event.key === 'End') {
+    event.preventDefault()
+    activeReviewSortOptionIndex.value = count - 1
+    return
+  }
+
+  if (event.key === 'Enter' || event.key === ' ') {
+    event.preventDefault()
+    const opt = reviewSortOptions[activeReviewSortOptionIndex.value]
+    if (opt) selectReviewSort(opt.value)
+    return
+  }
+
+  if (event.key === 'Escape') {
+    event.preventDefault()
+    closeReviewMenus()
+    reviewSortTrigger.value?.focus?.()
+  }
+}
+
+const handleReviewFilterListKeydown = (event) => {
+  const count = reviewFilterOptions.length
+  if (count === 0) return
+
+  if (event.key === 'Tab') {
+    closeReviewMenus()
+    return
+  }
+
+  if (event.key === 'ArrowDown') {
+    event.preventDefault()
+    activeReviewFilterOptionIndex.value = (activeReviewFilterOptionIndex.value + 1 + count) % count
+    return
+  }
+
+  if (event.key === 'ArrowUp') {
+    event.preventDefault()
+    activeReviewFilterOptionIndex.value = (activeReviewFilterOptionIndex.value - 1 + count) % count
+    return
+  }
+
+  if (event.key === 'Home') {
+    event.preventDefault()
+    activeReviewFilterOptionIndex.value = 0
+    return
+  }
+
+  if (event.key === 'End') {
+    event.preventDefault()
+    activeReviewFilterOptionIndex.value = count - 1
+    return
+  }
+
+  if (event.key === 'Enter' || event.key === ' ') {
+    event.preventDefault()
+    const opt = reviewFilterOptions[activeReviewFilterOptionIndex.value]
+    if (opt) selectReviewFilter(opt.value)
+    return
+  }
+
+  if (event.key === 'Escape') {
+    event.preventDefault()
+    closeReviewMenus()
+    reviewFilterTrigger.value?.focus?.()
+  }
+}
+
+const openLightbox = () => {
+  lightboxLastFocusedEl = document.activeElement
+  showLightbox.value = true
+}
+
+const closeLightbox = () => {
+  showLightbox.value = false
+}
+
+const handleLightboxKeydown = (event) => {
+  if (event.key === 'Escape') {
+    event.preventDefault()
+    closeLightbox()
+    return
+  }
+
+  if (event.key !== 'Tab') return
+
+  const root = lightboxEl.value
+  if (!root) return
+
+  const candidates = Array.from(
+    root.querySelectorAll(
+      'button:not([disabled]), [tabindex]:not([tabindex="-1"])'
+    )
+  ).filter((el) => {
+    if (!(el instanceof HTMLElement)) return false
+    return !!(el.offsetWidth || el.offsetHeight || el.getClientRects().length)
+  })
+
+  if (candidates.length === 0) return
+
+  const first = candidates[0]
+  const last = candidates[candidates.length - 1]
+  const active = document.activeElement
+
+  if (event.shiftKey) {
+    if (active === first || active === root) {
+      event.preventDefault()
+      last.focus()
+    }
+    return
+  }
+
+  if (active === last) {
+    event.preventDefault()
+    first.focus()
+  }
+}
+
+watch(showLightbox, async (isOpen) => {
+  if (isOpen) {
+    await nextTick()
+    lightboxCloseButton.value?.focus?.()
+    return
+  }
+
+  await nextTick()
+  const el = lightboxLastFocusedEl
+  lightboxLastFocusedEl = null
+  el?.focus?.()
+})
 
 onMounted(() => {
   window.addEventListener('click', handleReviewDocumentClick)
@@ -259,7 +454,7 @@ onBeforeUnmount(() => {
 const handleKeydown = (event) => {
   if (event.key !== 'Escape') return
   closeReviewMenus()
-  showLightbox.value = false
+  closeLightbox()
 }
 
 // Watch for route changes to reload product
@@ -275,12 +470,12 @@ const formatDate = (dateStr) => {
 </script>
 
 <template>
-  <div v-if="loading" class="loading-state">
+  <div v-if="loading" id="main-content" tabindex="-1" class="loading-state">
     <div class="loader"></div>
     <p>Loading Product Details...</p>
   </div>
   
-  <div v-else-if="!product" class="error-state">
+  <div v-else-if="!product" id="main-content" tabindex="-1" class="error-state">
     <h2>Product Not Found</h2>
     <p>The product you're looking for doesn't exist or has been removed.</p>
     <RouterLink to="/" class="back-home-btn">Return to Shop</RouterLink>
@@ -296,11 +491,11 @@ const formatDate = (dateStr) => {
           </RouterLink>
         </div>
         <div class="header-right">
-          <RouterLink to="/wishlist" class="header-btn wishlist-link" title="View Wishlist">
+          <RouterLink to="/wishlist" class="header-btn wishlist-link" title="View Wishlist" aria-label="View wishlist">
             <span class="btn-icon">♥</span>
             <span class="badge" v-if="productStore.favorites.length > 0">{{ productStore.favorites.length }}</span>
           </RouterLink>
-          <RouterLink to="/cart" class="header-btn cart-link" title="View Cart">
+          <RouterLink to="/cart" class="header-btn cart-link" title="View Cart" aria-label="View cart">
             <span class="btn-icon">🛒</span>
             <span class="badge" v-if="productStore.cart.length > 0">{{ productStore.cart.length }}</span>
           </RouterLink>
@@ -308,21 +503,22 @@ const formatDate = (dateStr) => {
       </div>
     </header>
 
-    <!-- Breadcrumbs -->
-    <nav class="breadcrumbs">
-      <RouterLink to="/">Products</RouterLink>
-      <span class="separator">/</span>
-      <RouterLink :to="'/?category=' + product.category" class="category-link">
-        {{ product.category.charAt(0).toUpperCase() + product.category.slice(1) }}
-      </RouterLink>
-      <span class="separator">/</span>
-      <span class="current">{{ product.title }}</span>
-    </nav>
+    <div id="main-content" tabindex="-1">
+      <!-- Breadcrumbs -->
+      <nav class="breadcrumbs">
+        <RouterLink to="/">Products</RouterLink>
+        <span class="separator">/</span>
+        <RouterLink :to="'/?category=' + product.category" class="category-link">
+          {{ product.category.charAt(0).toUpperCase() + product.category.slice(1) }}
+        </RouterLink>
+        <span class="separator">/</span>
+        <span class="current">{{ product.title }}</span>
+      </nav>
 
-    <div class="product-container">
+      <div class="product-container">
       <!-- Image Gallery Section -->
       <div class="product-visuals">
-        <div class="main-image-wrapper" @click="showLightbox = true">
+        <div class="main-image-wrapper" @click="openLightbox">
           <img :src="product.images[activeImageIndex] || product.thumbnail" :alt="product.title" class="main-image" decoding="async">
           <div class="zoom-hint">🔍 Click to enlarge</div>
           
@@ -336,9 +532,11 @@ const formatDate = (dateStr) => {
           <button 
             v-for="(img, index) in product.images" 
             :key="index"
+            type="button"
             class="thumb-btn"
             :class="{ active: activeImageIndex === index }"
             @click="activeImageIndex = index"
+            :aria-label="`View image ${index + 1}`"
           >
             <img :src="img" :alt="product.title + ' view ' + (index + 1)" loading="lazy" decoding="async">
           </button>
@@ -376,15 +574,17 @@ const formatDate = (dateStr) => {
 
         <div class="action-section">
           <div class="quantity-picker">
-            <button @click="quantity > 1 && quantity--" :disabled="quantity <= 1">-</button>
+            <button type="button" @click="quantity > 1 && quantity--" :disabled="quantity <= 1" aria-label="Decrease quantity">-</button>
             <span class="qty-display">{{ quantity }}</span>
-            <button @click="quantity < product.stock && quantity++" :disabled="quantity >= product.stock">+</button>
+            <button type="button" @click="quantity < product.stock && quantity++" :disabled="quantity >= product.stock" aria-label="Increase quantity">+</button>
           </div>
           
           <button 
             class="add-to-cart-btn" 
+            type="button"
             @click="addToCart" 
             :disabled="product.stock === 0"
+            :aria-label="`Add ${quantity} to basket`"
           >
             <span class="btn-icon">🛒</span>
             {{ product.stock === 0 ? 'Out of Stock' : 'Add to Basket' }}
@@ -394,6 +594,9 @@ const formatDate = (dateStr) => {
             class="favorite-toggle-btn" 
             :class="{ active: isFavorited }"
             @click="toggleFavorite"
+            type="button"
+            :aria-pressed="isFavorited"
+            :aria-label="isFavorited ? 'Remove from wishlist' : 'Add to wishlist'"
           >
             {{ isFavorited ? '❤️' : '🤍' }}
           </button>
@@ -442,7 +645,7 @@ const formatDate = (dateStr) => {
           </div>
         </div>
       </div>
-    </div>
+      </div>
 
     <div class="detail-divider"></div>
 
@@ -482,20 +685,38 @@ const formatDate = (dateStr) => {
               type="button"
               class="review-trigger"
               @click="toggleReviewFilterMenu"
+              ref="reviewFilterTrigger"
               :aria-expanded="reviewFilterOpen"
               aria-haspopup="listbox"
+              :aria-controls="reviewFilterOpen ? 'review-filter-listbox' : undefined"
             >
               <span class="review-trigger-text">{{ reviewFilterOptions.find(o => o.value === reviewFilterRating)?.label || 'All Ratings' }}</span>
               <span class="review-arrow">▾</span>
             </button>
-            <div v-if="reviewFilterOpen" class="review-options" role="listbox" :style="reviewFilterMenuStyle">
+            <div
+              v-if="reviewFilterOpen"
+              id="review-filter-listbox"
+              ref="reviewFilterListbox"
+              class="review-options"
+              role="listbox"
+              aria-label="Filter reviews by rating"
+              tabindex="0"
+              :style="reviewFilterMenuStyle"
+              :aria-activedescendant="activeReviewFilterOptionId"
+              @keydown="handleReviewFilterListKeydown"
+            >
               <button
-                v-for="opt in reviewFilterOptions"
+                v-for="(opt, i) in reviewFilterOptions"
                 :key="opt.value"
                 type="button"
                 class="review-option"
-                :class="{ selected: opt.value === reviewFilterRating }"
+                :class="{ selected: opt.value === reviewFilterRating, active: activeReviewFilterOptionIndex === i }"
                 @click="selectReviewFilter(opt.value)"
+                @mouseenter="activeReviewFilterOptionIndex = i"
+                role="option"
+                :id="`review-filter-option-${i}`"
+                :aria-selected="opt.value === reviewFilterRating"
+                tabindex="-1"
               >
                 {{ opt.label }}
               </button>
@@ -507,20 +728,38 @@ const formatDate = (dateStr) => {
               type="button"
               class="review-trigger"
               @click="toggleReviewSortMenu"
+              ref="reviewSortTrigger"
               :aria-expanded="reviewSortOpen"
               aria-haspopup="listbox"
+              :aria-controls="reviewSortOpen ? 'review-sort-listbox' : undefined"
             >
               <span class="review-trigger-text">{{ reviewSortOptions.find(o => o.value === reviewSortBy)?.label || 'Newest First' }}</span>
               <span class="review-arrow">▾</span>
             </button>
-            <div v-if="reviewSortOpen" class="review-options" role="listbox" :style="reviewSortMenuStyle">
+            <div
+              v-if="reviewSortOpen"
+              id="review-sort-listbox"
+              ref="reviewSortListbox"
+              class="review-options"
+              role="listbox"
+              aria-label="Sort reviews"
+              tabindex="0"
+              :style="reviewSortMenuStyle"
+              :aria-activedescendant="activeReviewSortOptionId"
+              @keydown="handleReviewSortListKeydown"
+            >
               <button
-                v-for="opt in reviewSortOptions"
+                v-for="(opt, i) in reviewSortOptions"
                 :key="opt.value"
                 type="button"
                 class="review-option"
-                :class="{ selected: opt.value === reviewSortBy }"
+                :class="{ selected: opt.value === reviewSortBy, active: activeReviewSortOptionIndex === i }"
                 @click="selectReviewSort(opt.value)"
+                @mouseenter="activeReviewSortOptionIndex = i"
+                role="option"
+                :id="`review-sort-option-${i}`"
+                :aria-selected="opt.value === reviewSortBy"
+                tabindex="-1"
               >
                 {{ opt.label }}
               </button>
@@ -554,11 +793,21 @@ const formatDate = (dateStr) => {
 
     <!-- Lightbox Overlay -->
     <transition name="fade">
-      <div v-if="showLightbox" class="lightbox" @click="showLightbox = false">
-        <button class="close-lightbox">✕</button>
+      <div
+        v-if="showLightbox"
+        ref="lightboxEl"
+        class="lightbox"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Image preview"
+        @click.self="closeLightbox"
+        @keydown="handleLightboxKeydown"
+      >
+        <button ref="lightboxCloseButton" type="button" class="close-lightbox" aria-label="Close image preview" @click.stop="closeLightbox">✕</button>
         <img :src="product.images[activeImageIndex] || product.thumbnail" :alt="product.title" decoding="async">
       </div>
     </transition>
+    </div>
   </div>
 </template>
 
@@ -1372,6 +1621,15 @@ const formatDate = (dateStr) => {
 }
 
 .review-option.selected {
+  background-color: rgba(77, 184, 255, 0.15);
+  color: #4db8ff;
+}
+
+.review-option.active {
+  background-color: #3a3a3a;
+}
+
+.review-option.selected.active {
   background-color: rgba(77, 184, 255, 0.15);
   color: #4db8ff;
 }

@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, computed, onBeforeUnmount } from 'vue'
+import { ref, onMounted, computed, onBeforeUnmount, nextTick } from 'vue'
 import { useProducts } from '../stores/products.js'
 import ProductContextMenu from '../components/ProductContextMenu.vue'
 
@@ -12,6 +12,10 @@ const itemsPerPage = ref('all')
 const currentPage = ref(1)
 const paginationOpen = ref(false)
 const paginationMenu = ref(null)
+// Accessibility: keyboard navigation for the items-per-page listbox
+const paginationTrigger = ref(null)
+const paginationListbox = ref(null)
+const activePaginationOptionIndex = ref(-1)
 const paginationOptions = [
   { value: 'all', label: 'Show All' },
   { value: 10, label: '10 per page' },
@@ -90,19 +94,80 @@ const handleContextMenu = (e, product) => {
 
 const togglePaginationMenu = (event) => {
   event.stopPropagation()
-  paginationOpen.value = !paginationOpen.value
+  if (paginationOpen.value) {
+    paginationOpen.value = false
+    activePaginationOptionIndex.value = -1
+    return
+  }
+
+  const selectedIndex = paginationOptions.findIndex(o => o.value === itemsPerPage.value)
+  activePaginationOptionIndex.value = selectedIndex >= 0 ? selectedIndex : 0
+  paginationOpen.value = true
+  nextTick(() => paginationListbox.value?.focus?.())
+}
+
+const handlePaginationListKeydown = (event) => {
+  const count = paginationOptions.length
+  if (count === 0) return
+
+  if (event.key === 'Tab') {
+    paginationOpen.value = false
+    activePaginationOptionIndex.value = -1
+    return
+  }
+
+  if (event.key === 'ArrowDown') {
+    event.preventDefault()
+    activePaginationOptionIndex.value = (activePaginationOptionIndex.value + 1 + count) % count
+    return
+  }
+
+  if (event.key === 'ArrowUp') {
+    event.preventDefault()
+    activePaginationOptionIndex.value = (activePaginationOptionIndex.value - 1 + count) % count
+    return
+  }
+
+  if (event.key === 'Home') {
+    event.preventDefault()
+    activePaginationOptionIndex.value = 0
+    return
+  }
+
+  if (event.key === 'End') {
+    event.preventDefault()
+    activePaginationOptionIndex.value = count - 1
+    return
+  }
+
+  if (event.key === 'Enter' || event.key === ' ') {
+    event.preventDefault()
+    const opt = paginationOptions[activePaginationOptionIndex.value]
+    if (opt) selectPaginationOption(opt.value)
+    return
+  }
+
+  if (event.key === 'Escape') {
+    event.preventDefault()
+    paginationOpen.value = false
+    activePaginationOptionIndex.value = -1
+    nextTick(() => paginationTrigger.value?.focus?.())
+  }
 }
 
 const selectPaginationOption = (value) => {
   itemsPerPage.value = value
   currentPage.value = 1
   paginationOpen.value = false
+  activePaginationOptionIndex.value = -1
+  nextTick(() => paginationTrigger.value?.focus?.())
   localStorage.setItem('itemsPerPage_wishlist', value)
 }
 
 const handleDocumentClick = (event) => {
   if (paginationMenu.value && !paginationMenu.value.contains(event.target)) {
     paginationOpen.value = false
+    activePaginationOptionIndex.value = -1
   }
 }
 
@@ -152,27 +217,44 @@ const endTouch = () => {
               type="button"
               class="sort-trigger"
               @click="togglePaginationMenu"
+              ref="paginationTrigger"
               :aria-expanded="paginationOpen"
               aria-haspopup="listbox"
+              :aria-controls="paginationOpen ? 'wishlist-pagination-listbox' : undefined"
             >
               <span class="trigger-text">{{ paginationOptions.find(option => option.value === itemsPerPage)?.label || 'Show All' }}</span>
               <span class="sort-arrow">▾</span>
             </button>
-            <div v-if="paginationOpen" class="sort-options" role="listbox">
+            <div
+              v-if="paginationOpen"
+              id="wishlist-pagination-listbox"
+              ref="paginationListbox"
+              class="sort-options"
+              role="listbox"
+              aria-label="Items per page"
+              tabindex="0"
+              :aria-activedescendant="activePaginationOptionIndex >= 0 ? `wishlist-pagination-option-${activePaginationOptionIndex}` : undefined"
+              @keydown="handlePaginationListKeydown"
+            >
               <button
-                v-for="option in paginationOptions"
+                v-for="(option, i) in paginationOptions"
                 :key="option.value"
                 type="button"
                 class="sort-option"
-                :class="{ selected: option.value === itemsPerPage }"
+                :class="{ selected: option.value === itemsPerPage, active: activePaginationOptionIndex === i }"
                 @click="selectPaginationOption(option.value)"
+                @mouseenter="activePaginationOptionIndex = i"
+                role="option"
+                :id="`wishlist-pagination-option-${i}`"
+                :aria-selected="option.value === itemsPerPage"
+                tabindex="-1"
               >
                 {{ option.label }}
               </button>
             </div>
           </div>
           <div class="actions-wrapper">
-            <RouterLink to="/cart" class="header-btn cart-link" title="View Cart">
+            <RouterLink to="/cart" class="header-btn cart-link" title="View Cart" aria-label="View cart">
               <span class="btn-icon">🛒</span>
               <span class="badge" v-if="productStore.cart.length > 0">{{ productStore.cart.length }}</span>
             </RouterLink>
@@ -191,7 +273,7 @@ const endTouch = () => {
       @close="contextMenuProduct = null"
     />
 
-    <main class="wishlist-main">
+    <main id="main-content" tabindex="-1" class="wishlist-main">
       <div v-if="favoriteProducts.length === 0" class="empty-wishlist">
         <div class="empty-illustration">
           <div class="illustration-circle"></div>
@@ -254,6 +336,7 @@ const endTouch = () => {
             type="button"
             class="favorite-btn favorited"
             @click="toggleFavorite(p.id)"
+            :aria-label="`Remove ${p.title} from wishlist`"
             title="Remove from wishlist"
           >
             ♥
@@ -596,6 +679,8 @@ header {
 
 .sort-option:hover { background-color: #3a3a3a; }
 .sort-option.selected { background-color: #4db8ff; color: #1a1a1a; }
+.sort-option.active { background-color: #3a3a3a; }
+.sort-option.selected.active { background-color: #4db8ff; color: #1a1a1a; }
 
 .pagination-controls {
   display: flex;

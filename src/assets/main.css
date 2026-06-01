@@ -17,6 +17,16 @@
   -webkit-tap-highlight-color: transparent; /* Remove tap highlight on mobile */
 }
 
+img, svg, svg *, video, canvas {
+  transition: none;
+}
+
+a:focus-visible,
+button:focus-visible {
+  outline: 0.125rem solid #4db8ff;
+  outline-offset: 0.1875rem;
+}
+
 a {
   color: white;
   text-decoration: none;
@@ -168,6 +178,12 @@ main {
 @media (hover: hover) {
   .product-card:hover {
     transform: translateY(-0.5rem);
+  }
+}
+
+@media (hover: none) {
+  .product-card:active {
+    transform: scale(0.98);
   }
 }
 

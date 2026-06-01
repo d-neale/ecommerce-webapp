@@ -40,6 +40,74 @@ const categories = computed(() => {
 
 const compareList = ref(JSON.parse(localStorage.getItem('compareList') || '[]'))
 const showCompareModal = ref(false)
+// Accessibility: compare modal focus trap + focus restore when the modal closes
+const compareModal = ref(null)
+const closeCompareButton = ref(null)
+let compareModalLastFocusedEl = null
+
+const openCompareModal = () => {
+  compareModalLastFocusedEl = document.activeElement
+  showCompareModal.value = true
+}
+
+const closeCompareModal = () => {
+  showCompareModal.value = false
+}
+
+const handleCompareModalKeydown = (event) => {
+  if (event.key === 'Escape') {
+    event.preventDefault()
+    closeCompareModal()
+    return
+  }
+
+  if (event.key !== 'Tab') return
+
+  const root = compareModal.value
+  if (!root) return
+
+  const candidates = Array.from(
+    root.querySelectorAll(
+      'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
+    )
+  ).filter((el) => {
+    if (!(el instanceof HTMLElement)) return false
+    if (el.hasAttribute('disabled')) return false
+    return !!(el.offsetWidth || el.offsetHeight || el.getClientRects().length)
+  })
+
+  if (candidates.length === 0) return
+
+  const first = candidates[0]
+  const last = candidates[candidates.length - 1]
+  const active = document.activeElement
+
+  if (event.shiftKey) {
+    if (active === first || active === root) {
+      event.preventDefault()
+      last.focus()
+    }
+    return
+  }
+
+  if (active === last) {
+    event.preventDefault()
+    first.focus()
+  }
+}
+
+watch(showCompareModal, async (isOpen) => {
+  if (isOpen) {
+    await nextTick()
+    closeCompareButton.value?.focus?.()
+    return
+  }
+
+  await nextTick()
+  const el = compareModalLastFocusedEl
+  compareModalLastFocusedEl = null
+  el?.focus?.()
+})
 
 watch(
   compareList,
@@ -201,6 +269,19 @@ const showSearchDropdown = computed(() => {
   )
 })
 
+// Accessibility: keyboard navigation + ARIA active descendant for the search combobox dropdown
+const activeSearchOptionIndex = ref(-1)
+
+const activeSearchOptionId = computed(() => {
+  if (!showSearchDropdown.value) return undefined
+  if (activeSearchOptionIndex.value < 0) return undefined
+  return `search-option-${activeSearchOptionIndex.value}`
+})
+
+const searchDropdownOptionCount = computed(() => {
+  return searchSuggestions.value.length + searchHistory.value.length
+})
+
 const handleSearchFocus = () => {
   searchOpen.value = true
 }
@@ -209,9 +290,82 @@ const handleSearchInput = () => {
   searchOpen.value = true
 }
 
+const closeSearchDropdown = () => {
+  searchOpen.value = false
+  activeSearchOptionIndex.value = -1
+}
+
+const scrollActiveSearchOptionIntoView = () => {
+  const id = activeSearchOptionId.value
+  if (!id) return
+  const el = document.getElementById(id)
+  if (!el) return
+  el.scrollIntoView({ block: 'nearest' })
+}
+
+const selectSearchOptionByIndex = (index) => {
+  const suggestionCount = searchSuggestions.value.length
+  if (index < suggestionCount) {
+    const suggestion = searchSuggestions.value[index]
+    if (!suggestion) return
+    inputText.value = suggestion.title
+    closeSearchDropdown()
+    handleSearchSubmit()
+    return
+  }
+
+  const historyIndex = index - suggestionCount
+  const historyValue = searchHistory.value[historyIndex]
+  if (typeof historyValue !== 'string') return
+  inputText.value = historyValue
+  closeSearchDropdown()
+  handleSearchSubmit()
+}
+
+const handleSearchKeydown = (event) => {
+  const count = searchDropdownOptionCount.value
+
+  if (event.key === 'ArrowDown') {
+    if (!searchOpen.value) searchOpen.value = true
+    if (count > 0) {
+      event.preventDefault()
+      activeSearchOptionIndex.value =
+        activeSearchOptionIndex.value < 0 ? 0 : (activeSearchOptionIndex.value + 1) % count
+      nextTick(scrollActiveSearchOptionIntoView)
+    }
+    return
+  }
+
+  if (event.key === 'ArrowUp') {
+    if (!searchOpen.value) searchOpen.value = true
+    if (count > 0) {
+      event.preventDefault()
+      activeSearchOptionIndex.value =
+        activeSearchOptionIndex.value < 0 ? count - 1 : (activeSearchOptionIndex.value - 1 + count) % count
+      nextTick(scrollActiveSearchOptionIntoView)
+    }
+    return
+  }
+
+  if (event.key === 'Enter') {
+    if (showSearchDropdown.value && activeSearchOptionIndex.value >= 0) {
+      event.preventDefault()
+      selectSearchOptionByIndex(activeSearchOptionIndex.value)
+    }
+    return
+  }
+
+  if (event.key === 'Escape') {
+    if (showSearchDropdown.value) {
+      event.preventDefault()
+      closeSearchDropdown()
+    }
+  }
+}
+
 const selectSuggestion = (suggestion) => {
   inputText.value = suggestion.title
-  searchOpen.value = false
+  closeSearchDropdown()
   handleSearchSubmit()
 }
 
@@ -229,7 +383,7 @@ const handleSearchSubmit = (e) => {
   const q = inputText.value.trim()
   if (q) {
     addToHistory(q)
-    searchOpen.value = false
+    closeSearchDropdown()
   }
 }
 
@@ -250,37 +404,179 @@ const removeHistoryItem = (query) => {
 const clearSearch = async (keepFocus = false) => {
   inputText.value = ''
   searchOpen.value = keepFocus
+  activeSearchOptionIndex.value = -1
   await nextTick()
   if (keepFocus && searchInput.value) {
     searchInput.value.focus()
   }
 }
 
+const sortTrigger = ref(null)
+const sortListbox = ref(null)
+// Accessibility: keyboard navigation for sort + pagination listboxes
+const activeSortOptionIndex = ref(-1)
+
+const activeSortOptionId = computed(() => {
+  if (!sortOpen.value) return undefined
+  if (activeSortOptionIndex.value < 0) return undefined
+  return `sort-option-${activeSortOptionIndex.value}`
+})
+
 const closeSortMenu = () => {
   sortOpen.value = false
+  activeSortOptionIndex.value = -1
 }
 
 const toggleSortMenu = (event) => {
   event.stopPropagation()
-  sortOpen.value = !sortOpen.value
+  if (sortOpen.value) {
+    closeSortMenu()
+    return
+  }
+
+  paginationOpen.value = false
+  const selectedIndex = sortOptions.findIndex(o => o.value === sortBy.value)
+  activeSortOptionIndex.value = selectedIndex >= 0 ? selectedIndex : 0
+  sortOpen.value = true
+  nextTick(() => sortListbox.value?.focus?.())
+}
+
+const handleSortListKeydown = (event) => {
+  const count = sortOptions.length
+  if (count === 0) return
+
+  if (event.key === 'Tab') {
+    closeSortMenu()
+    return
+  }
+
+  if (event.key === 'ArrowDown') {
+    event.preventDefault()
+    activeSortOptionIndex.value = (activeSortOptionIndex.value + 1 + count) % count
+    return
+  }
+
+  if (event.key === 'ArrowUp') {
+    event.preventDefault()
+    activeSortOptionIndex.value = (activeSortOptionIndex.value - 1 + count) % count
+    return
+  }
+
+  if (event.key === 'Home') {
+    event.preventDefault()
+    activeSortOptionIndex.value = 0
+    return
+  }
+
+  if (event.key === 'End') {
+    event.preventDefault()
+    activeSortOptionIndex.value = count - 1
+    return
+  }
+
+  if (event.key === 'Enter' || event.key === ' ') {
+    event.preventDefault()
+    const opt = sortOptions[activeSortOptionIndex.value]
+    if (opt) selectSortOption(opt.value)
+    return
+  }
+
+  if (event.key === 'Escape') {
+    event.preventDefault()
+    closeSortMenu()
+    sortTrigger.value?.focus?.()
+  }
 }
 
 const selectSortOption = (value) => {
   sortBy.value = value
-  sortOpen.value = false
+  closeSortMenu()
+  nextTick(() => sortTrigger.value?.focus?.())
   // Persist sort selection
   localStorage.setItem('lastSortBy', value)
 }
 
+const paginationTrigger = ref(null)
+const paginationListbox = ref(null)
+const activePaginationOptionIndex = ref(-1)
+
+const activePaginationOptionId = computed(() => {
+  if (!paginationOpen.value) return undefined
+  if (activePaginationOptionIndex.value < 0) return undefined
+  return `pagination-option-${activePaginationOptionIndex.value}`
+})
+
+const closePaginationMenu = () => {
+  paginationOpen.value = false
+  activePaginationOptionIndex.value = -1
+}
+
 const togglePaginationMenu = (event) => {
   event.stopPropagation()
-  paginationOpen.value = !paginationOpen.value
+  if (paginationOpen.value) {
+    closePaginationMenu()
+    return
+  }
+
+  closeSortMenu()
+  const selectedIndex = paginationOptions.findIndex(o => o.value === itemsPerPage.value)
+  activePaginationOptionIndex.value = selectedIndex >= 0 ? selectedIndex : 0
+  paginationOpen.value = true
+  nextTick(() => paginationListbox.value?.focus?.())
+}
+
+const handlePaginationListKeydown = (event) => {
+  const count = paginationOptions.length
+  if (count === 0) return
+
+  if (event.key === 'Tab') {
+    closePaginationMenu()
+    return
+  }
+
+  if (event.key === 'ArrowDown') {
+    event.preventDefault()
+    activePaginationOptionIndex.value = (activePaginationOptionIndex.value + 1 + count) % count
+    return
+  }
+
+  if (event.key === 'ArrowUp') {
+    event.preventDefault()
+    activePaginationOptionIndex.value = (activePaginationOptionIndex.value - 1 + count) % count
+    return
+  }
+
+  if (event.key === 'Home') {
+    event.preventDefault()
+    activePaginationOptionIndex.value = 0
+    return
+  }
+
+  if (event.key === 'End') {
+    event.preventDefault()
+    activePaginationOptionIndex.value = count - 1
+    return
+  }
+
+  if (event.key === 'Enter' || event.key === ' ') {
+    event.preventDefault()
+    const opt = paginationOptions[activePaginationOptionIndex.value]
+    if (opt) selectPaginationOption(opt.value)
+    return
+  }
+
+  if (event.key === 'Escape') {
+    event.preventDefault()
+    closePaginationMenu()
+    paginationTrigger.value?.focus?.()
+  }
 }
 
 const selectPaginationOption = (value) => {
   itemsPerPage.value = value
   currentPage.value = 1
-  paginationOpen.value = false
+  closePaginationMenu()
+  nextTick(() => paginationTrigger.value?.focus?.())
   localStorage.setItem('itemsPerPage', value)
 }
 
@@ -289,21 +585,21 @@ const handleDocumentClick = (event) => {
     closeSortMenu()
   }
   if (paginationMenu.value && !paginationMenu.value.contains(event.target)) {
-    paginationOpen.value = false
+    closePaginationMenu()
   }
   const form = searchForm.value
   if (form && !form.contains(event.target)) {
-    searchOpen.value = false
+    closeSearchDropdown()
   }
 }
 
 const handleKeydown = (event) => {
   if (event.key !== 'Escape') return
-  sortOpen.value = false
-  paginationOpen.value = false
-  searchOpen.value = false
+  closeSortMenu()
+  closePaginationMenu()
+  closeSearchDropdown()
   showFilters.value = false
-  showCompareModal.value = false
+  closeCompareModal()
   contextMenuProduct.value = null
 }
 
@@ -329,6 +625,10 @@ const clipText = (value, maxLength) => {
 }
 
 const viewportWidth = ref(typeof window !== 'undefined' ? window.innerWidth : 1024)
+
+const searchPlaceholder = computed(() => {
+  return viewportWidth.value <= 480 ? 'Search by product…' : 'Search by product name…'
+})
 
 const titleMaxLength = computed(() => {
   if (viewportWidth.value <= 480) return 48
@@ -579,19 +879,27 @@ const scheduleCheckScroll = (delay = 0) => {
   scrollCheckTimer = setTimeout(checkScroll, delay)
 }
 
+const scheduleLayoutRefresh = (delay = 0) => {
+  scheduleCheckScroll(delay)
+  scheduleFitDescriptions(delay)
+  scheduleFitTitles(delay)
+}
+
 const checkScroll = () => {
-  viewportWidth.value = window.innerWidth
   const scrollHeight = document.documentElement.scrollHeight
   const clientHeight = document.documentElement.clientHeight
   const scrollTop = window.scrollY || document.documentElement.scrollTop
   
   isScrollable.value = scrollHeight > clientHeight + 10 // Small buffer
   isAtBottom.value = scrollTop + clientHeight >= scrollHeight - 50
-  scheduleFitDescriptions(0)
-  scheduleFitTitles(0)
 }
 
 let persistSearchTimer = null
+
+const handleResize = () => {
+  viewportWidth.value = window.innerWidth
+  scheduleLayoutRefresh(0)
+}
 
 const closeContextMenu = () => {
   contextMenuProduct.value = null
@@ -651,11 +959,10 @@ onMounted(async () => {
   }
 
   window.addEventListener('scroll', checkScroll, { passive: true })
-  window.addEventListener('resize', checkScroll)
+  window.addEventListener('resize', handleResize)
+  handleResize()
   scheduleCheckScroll(50)
-  scheduleFitDescriptions(50)
   scheduleFitDescriptions(500)
-  scheduleFitTitles(50)
   scheduleFitTitles(500)
 })
 
@@ -671,7 +978,7 @@ onBeforeUnmount(() => {
   window.removeEventListener('click', handleDocumentClick)
   window.removeEventListener('keydown', handleKeydown)
   window.removeEventListener('scroll', checkScroll)
-  window.removeEventListener('resize', checkScroll)
+  window.removeEventListener('resize', handleResize)
   if (pressTimer) clearTimeout(pressTimer)
   if (scrollCheckTimer) clearTimeout(scrollCheckTimer)
   if (persistSearchTimer) clearTimeout(persistSearchTimer)
@@ -754,9 +1061,7 @@ const prevPage = () => {
 // keep local copy in sync if store updates later
 watch(() => productStore.allProducts, (val) => {
   productList.value = val || []
-  scheduleCheckScroll(100)
-  scheduleFitDescriptions(100)
-  scheduleFitTitles(100)
+  scheduleLayoutRefresh(100)
 })
 
 // Persist search text as user types (even before Enter)
@@ -765,23 +1070,18 @@ watch(inputText, (newVal) => {
   persistSearchTimer = setTimeout(() => {
     localStorage.setItem('lastSearch', newVal)
   }, 200)
-  scheduleCheckScroll(100)
-  scheduleFitDescriptions(100)
-  scheduleFitTitles(100)
+  scheduleLayoutRefresh(100)
 })
 
 // watch filtered products to update scroll state
 watch(() => filteredProducts.value, () => {
-  scheduleCheckScroll(100)
-  scheduleFitDescriptions(100)
-  scheduleFitTitles(100)
+  scheduleLayoutRefresh(100)
 })
 
 watch(
   () => paginatedProducts.value.map(p => p.id).join(','),
   () => {
-    scheduleFitDescriptions(0)
-    scheduleFitTitles(0)
+    scheduleLayoutRefresh(0)
   }
 )
 
@@ -801,15 +1101,24 @@ watch(
               v-model="inputText" 
               @input="handleSearchInput"
               @focus="handleSearchFocus"
+              @keydown="handleSearchKeydown"
               :class="{ 'search-open': showSearchDropdown }"
               type="text" 
               id="textbox1"
               :maxlength="MAX_SEARCH_LENGTH"
-              placeholder="Search by product name..."> 
+              role="combobox"
+              aria-autocomplete="list"
+              aria-haspopup="listbox"
+              :aria-expanded="showSearchDropdown"
+              :aria-controls="showSearchDropdown ? 'search-dropdown' : undefined"
+              :aria-activedescendant="activeSearchOptionId"
+              aria-label="Search products"
+              :placeholder="searchPlaceholder"> 
               <button
                 v-if="inputText.length > 0"
                 type="button"
                 class="clear-btn"
+                aria-label="Clear search"
                 title="Clear search"
                 @mousedown.prevent.stop="clearSearch(true)"
                 @click.prevent.stop="clearSearch(true)"
@@ -818,53 +1127,71 @@ watch(
               </button>
               <span class="char-count">{{ inputText.length }}/{{ MAX_SEARCH_LENGTH }}</span>
 
-              <div v-if="showSearchDropdown" class="search-dropdown">
-                <div v-if="searchSuggestions.length > 0" class="dropdown-section">
-                  <div class="section-title">Suggestions</div>
-                  <div 
-                    v-for="s in searchSuggestions" 
-                    :key="s.id" 
-                    class="dropdown-item"
-                    @mousedown="selectSuggestion(s)"
-                  >
-                    <img :src="s.thumbnail" class="item-thumb" loading="lazy" decoding="async">
-                    <span class="item-title">{{ s.title }}</span>
-                  </div>
-                </div>
-
-                <div v-if="searchHistory.length > 0" class="dropdown-section">
-                  <div class="section-header">
-                    <div class="section-title">Recent Searches</div>
-                    <button type="button" class="clear-history" @mousedown="clearHistory">Clear</button>
-                  </div>
-                  <div 
-                    v-for="h in searchHistory" 
-                    :key="h" 
-                    class="dropdown-item history-item"
-                    @mousedown="inputText = h; handleSearchSubmit()"
-                  >
-                    <span class="history-icon">🕒</span>
-                    <span class="item-title">{{ h }}</span>
-                    <button
-                      type="button"
-                      class="history-remove"
-                      title="Remove"
-                      @mousedown.stop.prevent="removeHistoryItem(h)"
+              <transition name="search-dropdown">
+                <div v-if="showSearchDropdown" id="search-dropdown" class="search-dropdown" role="listbox" aria-label="Search suggestions">
+                  <div v-if="searchSuggestions.length > 0" class="dropdown-section">
+                    <div class="section-title">Suggestions</div>
+                    <div 
+                      v-for="(s, i) in searchSuggestions" 
+                      :key="s.id" 
+                      :id="`search-option-${i}`"
+                      class="dropdown-item"
+                      @mousedown="selectSuggestion(s)"
+                      @click.prevent="selectSuggestion(s)"
+                      @keydown.enter.prevent="selectSuggestion(s)"
+                      @keydown.space.prevent="selectSuggestion(s)"
+                      :aria-selected="activeSearchOptionIndex === i"
+                      tabindex="0"
+                      role="option"
                     >
-                      ✕
-                    </button>
+                      <img :src="s.thumbnail" :alt="s.title" class="item-thumb" loading="lazy" decoding="async">
+                      <span class="item-title">{{ s.title }}</span>
+                    </div>
+                  </div>
+
+                  <div v-if="searchHistory.length > 0" class="dropdown-section">
+                    <div class="section-header">
+                      <div class="section-title">Recent Searches</div>
+                      <button type="button" class="clear-history" @mousedown="clearHistory" @click.prevent="clearHistory">Clear</button>
+                    </div>
+                    <div 
+                      v-for="(h, i) in searchHistory" 
+                      :key="h" 
+                      :id="`search-option-${searchSuggestions.length + i}`"
+                      class="dropdown-item history-item"
+                      @mousedown="inputText = h; handleSearchSubmit()"
+                      @click.prevent="inputText = h; handleSearchSubmit()"
+                      @keydown.enter.prevent="inputText = h; handleSearchSubmit()"
+                      @keydown.space.prevent="inputText = h; handleSearchSubmit()"
+                      :aria-selected="activeSearchOptionIndex === (searchSuggestions.length + i)"
+                      tabindex="0"
+                      role="option"
+                    >
+                      <span class="history-icon">🕒</span>
+                      <span class="item-title">{{ h }}</span>
+                      <button
+                        type="button"
+                        class="history-remove"
+                        title="Remove"
+                        :aria-label="`Remove ${h} from recent searches`"
+                        @mousedown.stop.prevent="removeHistoryItem(h)"
+                        @click.stop.prevent="removeHistoryItem(h)"
+                      >
+                        ✕
+                      </button>
+                    </div>
                   </div>
                 </div>
-              </div>
+              </transition>
             </div>
           </form>
 
-          <RouterLink to="/wishlist" class="header-btn wishlist-link" title="View Wishlist">
+          <RouterLink to="/wishlist" class="header-btn wishlist-link" title="View Wishlist" aria-label="View wishlist">
             <span class="btn-icon">♥</span>
             <span class="badge" v-if="productStore.favorites.length > 0">{{ productStore.favorites.length }}</span>
           </RouterLink>
 
-          <RouterLink to="/cart" class="header-btn cart-link" title="View Cart">
+          <RouterLink to="/cart" class="header-btn cart-link" title="View Cart" aria-label="View cart">
             <span class="btn-icon">🛒</span>
             <span class="badge" v-if="productStore.cart.length > 0">{{ productStore.cart.length }}</span>
           </RouterLink>
@@ -876,20 +1203,37 @@ watch(
               type="button"
               class="sort-trigger"
               @click="toggleSortMenu"
+              ref="sortTrigger"
               :aria-expanded="sortOpen"
               aria-haspopup="listbox"
+              :aria-controls="sortOpen ? 'sort-listbox' : undefined"
             >
               <span class="trigger-text">{{ sortOptions.find(option => option.value === sortBy)?.label || 'Sort by price...' }}</span>
               <span class="sort-arrow">▾</span>
             </button>
-            <div v-if="sortOpen" class="sort-options" role="listbox">
+            <div
+              v-if="sortOpen"
+              id="sort-listbox"
+              ref="sortListbox"
+              class="sort-options"
+              role="listbox"
+              aria-label="Sort options"
+              tabindex="0"
+              :aria-activedescendant="activeSortOptionId"
+              @keydown="handleSortListKeydown"
+            >
               <button
-                v-for="option in sortOptions"
+                v-for="(option, i) in sortOptions"
                 :key="option.value"
                 type="button"
                 class="sort-option"
-                :class="{ selected: option.value === sortBy }"
+                :class="{ selected: option.value === sortBy, active: activeSortOptionIndex === i }"
                 @click="selectSortOption(option.value)"
+                @mouseenter="activeSortOptionIndex = i"
+                role="option"
+                :id="`sort-option-${i}`"
+                :aria-selected="option.value === sortBy"
+                tabindex="-1"
               >
                 {{ option.label }}
               </button>
@@ -901,20 +1245,37 @@ watch(
               type="button"
               class="sort-trigger"
               @click="togglePaginationMenu"
+              ref="paginationTrigger"
               :aria-expanded="paginationOpen"
               aria-haspopup="listbox"
+              :aria-controls="paginationOpen ? 'pagination-listbox' : undefined"
             >
               <span class="trigger-text">{{ paginationOptions.find(option => option.value === itemsPerPage)?.label || 'Show All' }}</span>
               <span class="sort-arrow">▾</span>
             </button>
-            <div v-if="paginationOpen" class="sort-options" role="listbox">
+            <div
+              v-if="paginationOpen"
+              id="pagination-listbox"
+              ref="paginationListbox"
+              class="sort-options"
+              role="listbox"
+              aria-label="Items per page"
+              tabindex="0"
+              :aria-activedescendant="activePaginationOptionId"
+              @keydown="handlePaginationListKeydown"
+            >
               <button
-                v-for="option in paginationOptions"
+                v-for="(option, i) in paginationOptions"
                 :key="option.value"
                 type="button"
                 class="sort-option"
-                :class="{ selected: option.value === itemsPerPage }"
+                :class="{ selected: option.value === itemsPerPage, active: activePaginationOptionIndex === i }"
                 @click="selectPaginationOption(option.value)"
+                @mouseenter="activePaginationOptionIndex = i"
+                role="option"
+                :id="`pagination-option-${i}`"
+                :aria-selected="option.value === itemsPerPage"
+                tabindex="-1"
               >
                 {{ option.label }}
               </button>
@@ -927,6 +1288,8 @@ watch(
                 class="header-btn filter-toggle"
                 :class="{ active: showFilters || selectedBrands.length > 0 || minPrice > 0 || maxPrice < 2000 || minRating > 0 }"
                 @click="showFilters = !showFilters"
+                :aria-pressed="showFilters"
+                aria-label="Toggle advanced filters"
                 title="Toggle Advanced Filters"
               >
                 <span class="btn-icon">🔍</span>
@@ -937,7 +1300,8 @@ watch(
                 type="button" 
                 class="header-btn compare-btn" 
                 :class="{ 'has-items': compareList.length > 0 }"
-                @click="showCompareModal = true"
+                @click="openCompareModal"
+                :aria-label="`Compare products (${compareList.length} selected)`"
                 title="Compare Products"
               >
                 <span class="btn-icon">⚖️</span>
@@ -956,7 +1320,7 @@ watch(
           <button type="button" class="tag-text" @click="selectRecentSearch(search)">
             {{ search }}
           </button>
-          <button type="button" class="tag-remove" @click="removeSearch(index)" title="Remove">
+          <button type="button" class="tag-remove" @click="removeSearch(index)" :aria-label="`Remove recent search ${search}`" title="Remove">
             ✕
           </button>
         </div>
@@ -1031,18 +1395,18 @@ watch(
   </header>
 
   <transition name="fade">
-    <div v-if="showSuccess" class="success-message">
+    <div v-if="showSuccess" class="success-message" role="status" aria-live="polite" aria-atomic="true">
       Successfully added to cart!
     </div>
   </transition>
 
   <!-- Comparison Modal -->
   <transition name="fade">
-    <div v-if="showCompareModal" class="compare-modal-overlay" @click.self="showCompareModal = false">
-      <div class="compare-modal">
+    <div v-if="showCompareModal" class="compare-modal-overlay" @click.self="closeCompareModal">
+      <div ref="compareModal" class="compare-modal" role="dialog" aria-modal="true" aria-label="Compare products" @keydown="handleCompareModalKeydown">
         <div class="compare-header">
           <h3>Compare Products</h3>
-          <button class="close-modal" @click="showCompareModal = false">✕</button>
+          <button ref="closeCompareButton" class="close-modal" @click="closeCompareModal" aria-label="Close comparison dialog">✕</button>
         </div>
         <div v-if="compareList.length === 0" class="compare-empty">
           <div class="empty-illustration">
@@ -1051,7 +1415,7 @@ watch(
           </div>
           <p>Your comparison list is empty.</p>
           <p class="empty-subtitle">Add up to 3 products to compare their features side-by-side.</p>
-          <button class="browse-button" @click="showCompareModal = false">Continue Browsing</button>
+          <button class="browse-button" @click="closeCompareModal">Continue Browsing</button>
         </div>
         <div v-else class="compare-table-wrapper">
           <table class="compare-table">
@@ -1062,7 +1426,7 @@ watch(
                   <div class="compare-item-header">
                     <img :src="p.thumbnail" :alt="p.title" class="compare-thumb" loading="lazy" decoding="async">
                     <p>{{ p.title }}</p>
-                    <button class="remove-compare" @click="toggleCompare(p)">Remove</button>
+                    <button class="remove-compare" :aria-label="`Remove ${p.title} from comparison`" @click="toggleCompare(p)">Remove</button>
                   </div>
                 </th>
               </tr>
@@ -1107,7 +1471,7 @@ watch(
     @close="contextMenuProduct = null"
   />
 
-  <main>
+  <main id="main-content" tabindex="-1">
     <div class="products-grid">
       <template v-if="loading || !productList">
         <ProductSkeleton v-for="i in 8" :key="i" />
@@ -1256,7 +1620,7 @@ watch(
           <div class="compare-bar-thumbs">
             <div v-for="p in compareList" :key="p.id" class="compare-bar-thumb-wrapper">
               <img :src="p.thumbnail" :alt="p.title" class="compare-bar-thumb" loading="lazy" decoding="async">
-              <button class="compare-bar-remove" @click.stop="toggleCompare(p)">✕</button>
+              <button class="compare-bar-remove" :aria-label="`Remove ${p.title} from comparison`" @click.stop="toggleCompare(p)">✕</button>
             </div>
           </div>
           <div class="compare-bar-actions">
@@ -1265,7 +1629,7 @@ watch(
               <span class="compare-bar-clear-text">Clear</span>
               <span class="compare-bar-clear-all">All</span>
             </button>
-            <button class="compare-bar-view" @click="showCompareModal = true">
+            <button class="compare-bar-view" @click="openCompareModal">
               <span class="compare-bar-view-text">Compare</span>
               <span class="compare-bar-view-now">Now</span>
             </button>
@@ -1413,6 +1777,17 @@ watch(
   box-shadow: 0 1rem 2rem rgba(0, 0, 0, 0.5);
   margin-top: 0;
   overflow: hidden;
+}
+
+.search-dropdown-enter-active,
+.search-dropdown-leave-active {
+  transition: opacity 0.12s ease, transform 0.12s ease;
+}
+
+.search-dropdown-enter-from,
+.search-dropdown-leave-to {
+  opacity: 0;
+  transform: translateY(-0.25rem);
 }
 
 .search-dropdown .dropdown-section:first-child .section-title {
@@ -1625,8 +2000,12 @@ header {
   background-color: #3a3a3a;
 }
 
+.sort-option.active {
+  background-color: #3a3a3a;
+}
+
 @media (hover: hover) {
-  .sort-options:hover .sort-option.selected:not(:hover) {
+  .sort-options:hover .sort-option.selected:not(:hover):not(.active) {
     background-color: transparent;
   }
 
@@ -1950,6 +2329,22 @@ header {
   padding-bottom: 0;
 }
 
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+  transform: translateY(0.25rem);
+}
+
+.dropdown-item:focus-visible {
+  outline: 0.125rem solid #4db8ff;
+  outline-offset: -0.125rem;
+}
+
 .compare-toggle-btn {
   position: static;
   background: rgba(0, 0, 0, 0.5);
@@ -2191,6 +2586,11 @@ header {
     height: 2.5rem;
     font-size: 0.9375rem;
     padding: 0 5.5rem 0 0.8125rem;
+  }
+
+  .top-row #textbox1:placeholder-shown {
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
   
   .top-row .wishlist-link,
