@@ -313,6 +313,12 @@ const formatStockCount = (value) => {
   return n.toLocaleString('en-US')
 }
 
+const formatStockText = (value) => {
+  const n = Number(value)
+  if (!Number.isFinite(n) || n <= 0) return 'out\nof stock'
+  return `${n.toLocaleString('en-US')}\nin stock`
+}
+
 const clipText = (value, maxLength) => {
   const raw = String(value || '').trim()
   const normalized = raw.replace(/[\s,;:]+$/g, '')
@@ -1142,8 +1148,7 @@ watch(
                     <div class="product-meta">
                       <span class="meta-pill product-rating">⭐ {{ productStore.formatRating(p.rating) }}</span>
                       <span class="meta-pill product-stock" :class="{ 'low-stock': p.stock < 10 }">
-                        <span class="stock-count">{{ formatStockCount(p.stock) }}</span>
-                        <span class="stock-label">{{ p.stock === 0 ? 'out of stock' : 'in stock' }}</span>
+                        <span class="stock-text">{{ formatStockText(p.stock) }}</span>
                       </span>
                     </div>
                   </div>
@@ -2263,53 +2268,26 @@ header {
   }
 
   .products-grid .product-info .product-meta {
-    display: grid;
-    grid-template-columns: max-content minmax(0, 7.25rem);
-    column-gap: 0.25rem;
-    align-items: start;
+    display: flex;
+    align-items: flex-start;
+    gap: 0.25rem;
     margin-bottom: 0.25rem;
     width: 100%;
   }
 
-  .products-grid .product-info .meta-pill {
-    font-size: 0.5625rem;
-    padding: 0.1875rem 0.375rem;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 0.25rem;
-    max-width: 100%;
-    line-height: 1.2;
-    min-width: 0;
-    white-space: nowrap;
-    overflow: visible;
-    box-sizing: border-box;
-  }
-
-  .products-grid .product-info .meta-pill.product-rating {
-    white-space: nowrap;
-    justify-self: start;
-  }
-
   .products-grid .product-info .meta-pill.product-stock {
-    justify-self: end;
-    width: 100%;
-    display: block;
+    margin-left: auto;
+    width: 7.25rem;
     text-align: right;
     overflow: visible;
     min-width: 0;
     max-width: 100%;
-    white-space: normal !important;
-    line-height: 1.15;
   }
 
-  .products-grid .product-info .meta-pill.product-stock .stock-count,
-  .products-grid .product-info .meta-pill.product-stock .stock-label {
-    display: block !important;
-    white-space: normal !important;
-    overflow: visible;
-    overflow-wrap: anywhere;
-    word-break: break-word;
+  .products-grid .product-info .meta-pill.product-stock .stock-text {
+    display: block;
+    white-space: pre-line;
+    line-height: 1.15;
   }
 }
 
