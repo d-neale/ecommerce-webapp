@@ -1143,7 +1143,6 @@ watch(
                       <span class="meta-pill product-rating">⭐ {{ productStore.formatRating(p.rating) }}</span>
                       <span class="meta-pill product-stock" :class="{ 'low-stock': p.stock < 10 }">
                         <span class="stock-count">{{ formatStockCount(p.stock) }}</span>
-                        <span class="stock-break" aria-hidden="true"></span>
                         <span class="stock-label">{{ p.stock === 0 ? 'out of stock' : 'in stock' }}</span>
                       </span>
                     </div>
@@ -2290,16 +2289,18 @@ header {
     max-width: 100%;
   }
 
-  .products-grid .product-info .meta-pill.product-stock .stock-break {
-    display: block;
-    height: 0;
-  }
-
   .products-grid .product-info .meta-pill.product-stock .stock-count,
   .products-grid .product-info .meta-pill.product-stock .stock-label {
     display: block;
     white-space: nowrap;
     overflow: visible;
+  }
+
+  .products-grid .product-info .meta-pill.product-stock {
+    display: grid;
+    grid-auto-flow: row;
+    justify-items: end;
+    align-content: start;
   }
 }
 
@@ -2575,9 +2576,6 @@ header {
   justify-content: flex-end;
 }
 
-.stock-break {
-  display: none;
-}
 
 .product-stock.low-stock {
   border-color: rgba(255, 152, 0, 0.6);
