@@ -2198,7 +2198,7 @@ header {
 
   .product-info {
     padding: 0.875rem;
-    height: 12.25rem;
+    height: 12.75rem;
   }
 
   .product-title {
@@ -2252,7 +2252,7 @@ header {
     text-overflow: ellipsis;
   }
 
-  .product-meta {
+  .products-grid .product-info .product-meta {
     display: grid;
     grid-template-columns: auto minmax(0, 1fr);
     column-gap: 0.25rem;
@@ -2261,25 +2261,27 @@ header {
     width: 100%;
   }
 
-  .meta-pill {
+  .products-grid .product-info .meta-pill {
     font-size: 0.5625rem;
     padding: 0.1875rem 0.375rem;
     display: block;
     max-width: 100%;
+    line-height: 1.2;
+    white-space: normal;
+    overflow: visible;
   }
 
-  .product-rating {
+  .products-grid .product-info .meta-pill.product-rating {
     justify-self: start;
     white-space: nowrap;
   }
 
-  .product-stock {
+  .products-grid .product-info .meta-pill.product-stock {
     justify-self: end;
-    max-width: 8.75rem;
-    white-space: normal;
+    max-width: 7.5rem;
     text-align: right;
-    line-height: 1.1;
     overflow-wrap: anywhere;
+    word-break: break-word;
   }
 }
 
