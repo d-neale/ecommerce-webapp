@@ -307,10 +307,10 @@ const handleKeydown = (event) => {
   contextMenuProduct.value = null
 }
 
-const formatStock = (value) => {
+const formatStockCount = (value) => {
   const n = Number(value)
-  if (!Number.isFinite(n)) return '0 in stock'
-  return `${n.toLocaleString('en-US')} in stock`
+  if (!Number.isFinite(n)) return '0'
+  return n.toLocaleString('en-US')
 }
 
 const clipText = (value, maxLength) => {
@@ -1142,7 +1142,8 @@ watch(
                     <div class="product-meta">
                       <span class="meta-pill product-rating">⭐ {{ productStore.formatRating(p.rating) }}</span>
                       <span class="meta-pill product-stock" :class="{ 'low-stock': p.stock < 10 }">
-                        {{ formatStock(p.stock) }}
+                        <span class="stock-count">{{ formatStockCount(p.stock) }}</span>
+                        <span class="stock-label">{{ p.stock === 0 ? 'out of stock' : 'in stock' }}</span>
                       </span>
                     </div>
                   </div>
@@ -2198,7 +2199,7 @@ header {
 
   .product-info {
     padding: 0.875rem;
-    height: 12.75rem;
+    height: 13.25rem;
   }
 
   .product-title {
@@ -2264,11 +2265,15 @@ header {
   .products-grid .product-info .meta-pill {
     font-size: 0.5625rem;
     padding: 0.1875rem 0.375rem;
-    display: block;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.25rem;
     max-width: 100%;
     line-height: 1.2;
-    white-space: normal;
+    white-space: nowrap;
     overflow: visible;
+    box-sizing: border-box;
   }
 
   .products-grid .product-info .meta-pill.product-rating {
@@ -2278,10 +2283,18 @@ header {
 
   .products-grid .product-info .meta-pill.product-stock {
     justify-self: end;
-    max-width: 7.5rem;
+    min-width: 0;
+    max-width: 100%;
     text-align: right;
-    overflow-wrap: anywhere;
-    word-break: break-word;
+    justify-content: flex-end;
+    white-space: normal;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 0;
+  }
+
+  .products-grid .product-info .meta-pill.product-stock .stock-label {
+    white-space: nowrap;
   }
 }
 
@@ -2522,10 +2535,11 @@ header {
 }
 
 .product-meta {
-  display: flex;
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 0.5rem;
   align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
+  width: 100%;
 }
 
 .meta-pill {
@@ -2540,8 +2554,10 @@ header {
   font-size: 0.75rem;
   font-weight: 800;
   color: #eee;
-  line-height: 1;
+  line-height: 1.2;
   white-space: nowrap;
+  box-sizing: border-box;
+  max-width: 100%;
 }
 
 .product-rating {
@@ -2550,6 +2566,8 @@ header {
 
 .product-stock {
   color: #b3b3b3;
+  justify-self: end;
+  justify-content: flex-end;
 }
 
 .product-stock.low-stock {
